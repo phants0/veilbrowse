@@ -309,27 +309,30 @@ async function runScripts(selectedOnly) {
   }).join("\n");
 
   scriptSandbox.srcdoc = `
-    <!doctype html><meta charset="utf-8">
+    <!doctype html>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; connect-src 'none'; object-src 'none'; base-uri 'none';">
     <script>
       window.addEventListener("error", event => parent.postMessage({
         source: "veilbrowse-local-script", type: "error", file: "sandbox",
         args: [event.message || "Script error"]
       }, "*"));
     <\/script>
-    <script>${payload.replace(/<\/script/gi, "<\\/script")}<\/script>
+    <script>${payload.replace(/<\/script/gi, "<\\/script")}</script>
+    <script>
+      parent.postMessage({source:"veilbrowse-local-script",type:"done",file:"sandbox",args:[]}, "*");
+    <\/script>
   `;
-
-  window.setTimeout(() => {
-    if (token === runToken) {
-      setRunning(false);
-      logConsole("Finished.", "system");
-    }
-  }, 1000);
 }
 
 window.addEventListener("message", (event) => {
   if (event.source !== scriptSandbox.contentWindow || event.data?.source !== "veilbrowse-local-script") return;
   const data = event.data;
+  if (data.type === "done") {
+    setRunning(false);
+    logConsole("Finished.", "system");
+    return;
+  }
   const prefix = data.file ? "[" + data.file + "] " : "";
   logConsole(prefix + (data.args || []).join(" "), data.type === "error" ? "error" : data.type === "warn" ? "warn" : "");
 });
