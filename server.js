@@ -2,10 +2,11 @@ import express from "express";
 import dns from "node:dns/promises";
 import net from "node:net";
 import { Readable } from "node:stream";
+import { fileURLToPath } from "node:url";
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
-const PUBLIC_DIR = new URL("./public/", import.meta.url);
+const PUBLIC_DIR = fileURLToPath(new URL("./public/", import.meta.url));
 
 app.disable("x-powered-by");
 
@@ -309,7 +310,7 @@ app.get("/proxy", async (req, res) => {
 
 app.use((_req, res) => {
   res.sendFile("index.html", {
-    root: PUBLIC_DIR.pathname
+    root: PUBLIC_DIR
   });
 });
 
