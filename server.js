@@ -618,6 +618,119 @@ app.get("/search", async (req, res) => {
     }
   ];
 
+  const escapeHtml = (value) => String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+
+  function extractResults($) {
+    const results = [];
+
+    const add = (title, href, snippet) => {
+      if (!title || !href) return;
+
+      try {
+        const parsed = new URL(href);
+        if (!["http:", "https:"].includes(parsed.protocol)) return;
+        if (parsed.hostname.endsWith("duckduckgo.com") || parsed.hostname.endsWith("bing.com")) return;
+
+        const cleanTitle = title.trim();
+        const cleanSnippet = (snippet || "").trim();
+        if (!cleanTitle || results.some((item) => item.href === parsed.href)) return;
+
+        results.push({
+          title: cleanTitle,
+          href: parsed.href,
+          snippet: cleanSnippet
+        });
+      } catch {}
+    };
+
+    $(".result").each((_, element) => {
+      const link = $(element).find("a.result__a, a.result-link").first();
+      const snippet = $(element).find(".result__snippet, .result-snippet").first();
+      if (link.length) add(link.text(), link.attr("href"), snippet.text());
+    });
+
+    $("li.b_algo").each((_, element) => {
+      const link = $(element).find("h2 a").first();
+      const snippet = $(element).find(".b_caption p, p").first();
+      if (link.length) add(link.text(), link.attr("href"), snippet.text());
+    });
+
+    if (results.length === 0) {
+      $("a.result__a, a.result-link").each((_, element) => {
+        const link = $(element);
+        const container = link.closest(".result, tr");
+        add(
+          link.text(),
+          link.attr("href"),
+          container.find(".result__snippet, .result-snippet").first().text()
+        );
+      });
+    }
+
+    return results.slice(0, 20);
+  }
+
+  function renderSearchPage(results) {
+    const cards = results.length
+      ? results.map((result) => {
+          const proxied = proxyUrl(result.href, "https://veilbrowse.local/");
+          let hostname = "";
+          try {
+            hostname = new URL(result.href).hostname;
+          } catch {}
+
+          return '<article class="result-card">' +
+            '<div class="result-url">' + escapeHtml(hostname) + '</div>' +
+            '<h2><a href="' + escapeHtml(proxied) + '">' + escapeHtml(result.title) + '</a></h2>' +
+            (result.snippet ? '<p>' + escapeHtml(result.snippet) + '</p>' : '') +
+            '</article>';
+        }).join("")
+      : '<div class="empty">No results were found. Try a different search.</div>';
+
+    return '<!doctype html>' +
+'<html lang="en"><head>' +
+'<meta charset="utf-8">' +
+'<meta name="viewport" content="width=device-width,initial-scale=1">' +
+'<meta name="referrer" content="no-referrer">' +
+'<meta name="robots" content="noindex,nofollow">' +
+'<title>' + escapeHtml(query) + ' — VeilBrowse</title>' +
+'<style>' +
+':root{color-scheme:dark}*{box-sizing:border-box}' +
+'body{margin:0;background:#08090c;color:#f4f4f5;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}' +
+'.top{position:sticky;top:0;z-index:10;background:rgba(8,9,12,.94);backdrop-filter:blur(14px);border-bottom:1px solid #20232a;padding:14px 20px}' +
+'.nav{max-width:980px;margin:0 auto;display:flex;gap:12px;align-items:center}' +
+'.brand{color:#fff;text-decoration:none;font-weight:800;letter-spacing:.08em;font-size:14px;white-space:nowrap}' +
+'form{display:flex;flex:1;gap:8px}' +
+'input{width:100%;height:42px;border:1px solid #30343d;border-radius:10px;background:#111318;color:#fff;padding:0 14px;font:inherit;outline:none}' +
+'input:focus{border-color:#687386;box-shadow:0 0 0 3px rgba(120,130,150,.14)}' +
+'button{height:42px;border:0;border-radius:10px;padding:0 18px;background:#f4f4f5;color:#090a0c;font:600 14px inherit;cursor:pointer}' +
+'main{max-width:980px;margin:0 auto;padding:30px 20px 60px}' +
+'.meta{color:#8d94a1;font-size:13px;margin-bottom:20px}' +
+'.result-card{padding:0 0 25px;margin-bottom:25px;border-bottom:1px solid #1d2026}' +
+'.result-url{font-size:12px;color:#7f8795;margin-bottom:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+'h2{font-size:19px;line-height:1.35;margin:0 0 7px;font-weight:650}' +
+'h2 a{color:#8ab4ff;text-decoration:none}' +
+'h2 a:hover{text-decoration:underline}' +
+'p{margin:0;color:#b8bec9;font-size:14px;line-height:1.55;max-width:760px}' +
+'.empty{padding:40px 0;color:#aeb5c1}' +
+'@media(max-width:600px){.top{padding:10px}.nav{gap:8px}.brand{display:none}main{padding:24px 14px 50px}}' +
+'</style></head><body>' +
+'<header class="top"><div class="nav">' +
+'<a class="brand" href="/">VEILBROWSE</a>' +
+'<form action="/search" method="get">' +
+'<input name="q" value="' + escapeHtml(query) + '" aria-label="Search" autocomplete="off" spellcheck="false">' +
+'<button type="submit">Search</button>' +
+'</form></div></header>' +
+'<main><div class="meta">Search results for <strong>' + escapeHtml(query) + '</strong></div>' +
+cards +
+'</main></body></html>';
+  }
+
   let lastError = null;
 
   for (const provider of providers) {
@@ -644,52 +757,17 @@ app.get("/search", async (req, res) => {
 
       const { load } = await import("cheerio");
       const $ = load(html, { decodeEntities: false });
+      const results = extractResults($);
 
-      $("a").each((_, element) => {
-        const href = $(element).attr("href");
-        if (!href || href.startsWith("#") || href.startsWith("javascript:")) return;
-
-        try {
-          const parsed = new URL(href, provider.url);
-
-          if (parsed.searchParams.has("uddg")) {
-            const destination = parsed.searchParams.get("uddg");
-            if (destination && /^https?:/i.test(destination)) {
-              $(element).attr("href", proxyUrl(destination, provider.url));
-              return;
-            }
-          }
-
-          if (/^https?:/i.test(parsed.href) && !parsed.hostname.endsWith("duckduckgo.com") && !parsed.hostname.endsWith("bing.com")) {
-            $(element).attr("href", proxyUrl(parsed.href, provider.url));
-          }
-        } catch {}
-      });
-
-      $("form").each((_, element) => {
-        $(element).attr("action", "/search");
-        $(element).attr("method", "get");
-        const q = $(element).find('input[name="q"]');
-        if (q.length) {
-          q.attr("name", "q");
-        } else {
-          $(element).prepend('<input type="hidden" name="q" value="">');
-        }
-      });
-
-      $("head").prepend(
-        '<meta name="referrer" content="no-referrer">' +
-        '<meta name="robots" content="noindex,nofollow">' +
-        '<style>' +
-        'body{margin:0!important;background:#08090c!important;color:#f4f4f5!important;font-family:Inter,system-ui,sans-serif!important}' +
-        'a{color:#8ab4ff}' +
-        '</style>'
-      );
+      if (results.length === 0) {
+        lastError = new Error(provider.name + " returned no parseable results");
+        continue;
+      }
 
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       res.setHeader("Cache-Control", "no-store, private, max-age=0");
       res.setHeader("Referrer-Policy", "no-referrer");
-      return res.send($.html());
+      return res.send(renderSearchPage(results));
     } catch (error) {
       lastError = error;
     } finally {
@@ -703,7 +781,6 @@ app.get("/search", async (req, res) => {
 
   return res.status(502).send(reason);
 });
-
 app.all("/proxy", async (req, res) => {
   const rawUrl = typeof req.query.url === "string" ? req.query.url.trim() : "";
 
