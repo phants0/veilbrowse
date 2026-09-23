@@ -871,13 +871,12 @@ app.get("/search", async (req, res) => {
 '.top{position:sticky;top:0;z-index:10;background:rgba(8,9,12,.94);backdrop-filter:blur(14px);border-bottom:1px solid #20232a;padding:10px 20px}' +
 '.nav{max-width:980px;margin:0 auto;display:flex;gap:10px;align-items:center}' +
 '.brand{color:#fff;text-decoration:none;font-weight:800;letter-spacing:.08em;font-size:14px;white-space:nowrap}' +
-'.search-shell{position:relative;display:flex;flex:1;min-width:0;align-items:flex-start;justify-content:flex-end;min-height:28px}' +
-'.search-shell form{display:flex;gap:8px;width:min(760px,100%);max-height:56px;overflow:hidden;opacity:1;transform:translateY(0);transition:max-height .24s ease,opacity .2s ease,transform .24s ease;margin:28px 0 0;padding:0 48px 0 0}' +
-'.search-shell.collapsed form{max-height:0;opacity:0;transform:translateY(-10px);pointer-events:none;margin-top:28px;padding:0}' +
-'.toggle{position:absolute;right:0;top:0;z-index:3;display:flex;align-items:center;justify-content:center;width:42px;min-width:42px;height:28px;padding:0;background:#111318;color:#aeb5c1;border:1px solid #30343d;border-radius:10px 10px 0 0;font-size:18px;line-height:1;cursor:pointer;transition:top .24s ease,background .16s ease,color .16s ease;box-shadow:0 0 0 1px #111318}' +
-'.search-shell:not(.collapsed) .toggle{top:28px}' +
-'.toggle:hover{background:#181b21;color:#fff}' +
-'.toggle:focus-visible{outline:2px solid #8ab4ff;outline-offset:2px}' +
+'.search-shell{display:flex;flex:1;min-width:0;align-items:flex-start;justify-content:flex-end;gap:8px}' +
+'.search-shell form{display:flex;gap:8px;width:min(760px,100%);max-height:56px;overflow:hidden;opacity:1;transform:translateY(0);transition:max-height .24s ease,opacity .2s ease,transform .24s ease;margin:0;padding:0}' +
+'.search-shell.collapsed form{max-height:0;opacity:0;transform:translateY(-10px);pointer-events:none;margin:0;padding:0}' +
+'.search-toggle{height:40px;border:1px solid #30343d;border-radius:10px;padding:0 14px;background:#111318;color:#aeb5c1;font:600 14px inherit;cursor:pointer;transition:background .16s ease,color .16s ease}' +
+'.search-toggle:hover{background:#181b21;color:#fff}' +
+'.search-toggle:focus-visible{outline:2px solid #8ab4ff;outline-offset:2px}' +
 'input{width:100%;height:40px;border:1px solid #30343d;border-radius:10px;background:#111318;color:#fff;padding:0 14px;font:inherit;outline:none}' +
 'input:focus{border-color:#687386;box-shadow:0 0 0 3px rgba(120,130,150,.14)}' +
 'button{height:40px;border:0;border-radius:10px;padding:0 16px;background:#f4f4f5;color:#090a0c;font:600 14px inherit;cursor:pointer}' +
@@ -900,11 +899,11 @@ app.get("/search", async (req, res) => {
 '<input name="q" value="' + escapeHtml(query) + '" aria-label="Search" autocomplete="off" spellcheck="false">' +
 '<button type="submit">Search</button>' +
 '</form>' +
-'<button class="toggle" id="collapseSearch" type="button" aria-label="Expand search bar" aria-expanded="false">⌄</button>' +
+'<button class="search-toggle" id="collapseSearch" type="button" aria-label="Show search bar" aria-expanded="false">Show</button>' +
 '</div></div></header>' +
 '<main><div class="meta">Search results for <strong>' + escapeHtml(query) + '</strong> <span class="provider">• Powered by ' + escapeHtml(providerName) + '</span></div>' +
 cards +
-'</main><script>(function(){const shell=document.getElementById("searchShell");const button=document.getElementById("collapseSearch");const form=shell?.querySelector("form");if(!shell||!button)return;button.addEventListener("click",function(){const collapsed=shell.classList.toggle("collapsed");button.setAttribute("aria-expanded",String(!collapsed));button.setAttribute("aria-label",collapsed?"Expand search bar":"Collapse search bar");button.textContent="⌄";if(!collapsed)form?.querySelector("input")?.focus();});})();</script></body></html>';
+'</main><script>(function(){const shell=document.getElementById("searchShell");const button=document.getElementById("collapseSearch");const form=shell?.querySelector("form");if(!shell||!button)return;button.addEventListener("click",function(){const collapsed=shell.classList.toggle("collapsed");button.setAttribute("aria-expanded",String(!collapsed));button.setAttribute("aria-label",collapsed?"Show search bar":"Hide search bar");button.textContent=collapsed?"Show":"Hide";if(!collapsed)form?.querySelector("input")?.focus();});})();</script></body></html>';
   }
 
   let lastError = null;
