@@ -14,24 +14,8 @@
       <h1 id="title">Browse privately.</h1>
       <p>Search the web or enter a website and open it through a temporary, no-history proxy.</p>
 
-      <form id="search" class="url-form search-form">
-        <label class="sr-only" for="search-input">Search the web</label>
-        <input
-          id="search-input"
-          name="q"
-          type="search"
-          autocomplete="off"
-          spellcheck="false"
-          placeholder="Search the web with DuckDuckGo"
-          required
-        >
-        <button type="submit">Search</button>
-      </form>
-
-      <div class="or-divider"><span>or</span></div>
-
-      <form id="go" class="url-form">
-        <label class="sr-only" for="url">Website URL</label>
+      <form id="go" class="url-form omnibox">
+        <label class="sr-only" for="url">Search or enter a website URL</label>
         <input
           id="url"
           name="url"
@@ -40,10 +24,11 @@
           autocomplete="off"
           autocapitalize="off"
           spellcheck="false"
-          placeholder="https://example.com"
+          placeholder="Search or enter a website URL"
+          aria-label="Search or enter a website URL"
           required
         >
-        <button type="submit">Go</button>
+        <button type="submit" aria-label="Go">Go</button>
       </form>
 
       <div class="privacy">
