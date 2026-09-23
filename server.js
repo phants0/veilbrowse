@@ -582,6 +582,86 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true, persistentStorage: false });
 });
 
+app.get("/search-debug", async (req, res) => {
+  const query = typeof req.query.q === "string" ? req.query.q.trim() : "";
+  if (!query || query.length > 300) {
+    return res.status(400).json({ ok: false, error: "Provide a search query with ?q=..." });
+  }
+
+  const providers = [
+    {
+      name: "DuckDuckGo HTML",
+      url: "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query),
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml",
+        "Accept-Language": "en-US,en;q=0.9"
+      }
+    },
+    {
+      name: "Bing RSS",
+      url: "https://www.bing.com/search?format=rss&q=" + encodeURIComponent(query),
+      headers: {
+        "User-Agent": "VeilBrowse/1.0",
+        "Accept": "application/rss+xml, application/xml, text/xml;q=0.9"
+      }
+    },
+    {
+      name: "Bing HTML",
+      url: "https://www.bing.com/search?q=" + encodeURIComponent(query),
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml",
+        "Accept-Language": "en-US,en;q=0.9"
+      }
+    }
+  ];
+
+  const diagnostics = [];
+
+  for (const provider of providers) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const upstream = await fetch(provider.url, {
+        signal: controller.signal,
+        headers: provider.headers,
+        redirect: "follow"
+      });
+      const body = await upstream.text();
+      const preview = body.replace(/\s+/g, " ").slice(0, 180);
+
+      diagnostics.push({
+        provider: provider.name,
+        ok: upstream.ok,
+        status: upstream.status,
+        contentType: upstream.headers.get("content-type") || null,
+        bytes: body.length,
+        looksLikeHtml: /<html|<body/i.test(body),
+        looksLikeXml: /<rss|<feed|<item/i.test(body),
+        hasChallengeWords: /(captcha|unusual traffic|access denied|robot|automated)/i.test(body),
+        preview
+      });
+    } catch (error) {
+      diagnostics.push({
+        provider: provider.name,
+        ok: false,
+        error: error?.name === "AbortError" ? "timeout" : String(error?.message || error)
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  res.setHeader("Cache-Control", "no-store, private, max-age=0");
+  res.json({
+    ok: diagnostics.some((item) => item.ok),
+    searchNetworkTest: true,
+    diagnostics
+  });
+});
+
 app.get("/search", async (req, res) => {
   const query = typeof req.query.q === "string" ? req.query.q.trim() : "";
 
