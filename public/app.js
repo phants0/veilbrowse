@@ -240,6 +240,8 @@ const HIGHLIGHT_RULES = {
   }
 };
 
+Object.assign(HIGHLIGHT_RULES, { css: { comments: /\/\*[\s\S]*?\*\//g, strings: [/"(?:\\\\.|[^"\\\\])*"/g, /'(?:\\\\.|[^'\\\\])*'/g], keywords: /@[a-z-]+/gi, literals: /\b(?:inherit|initial|unset|none|auto|block|inline|flex|grid)\b/gi, numbers: /\b\d+(?:\.\d+)?(?:px|em|rem|%|vh|vw|s|ms)?\b/gi }, xml: { comments: /<!--[\\s\\S]*?-->/g, strings: [/"[^"]*"/g, /'[^']*'/g], keywords: /<\/?[a-z][\w:-]*/gi }, markdown: { comments: /^\s*>.*$/gm, keywords: /^\s*#{1,6}\s.*$/gm, literals: /\*\*[^*]+\*\*|__[^_]+__/g }, toml: { comments: /#[^\n]*/g, strings: [/"(?:\\\\.|[^"\\\\])*"/g, /'(?:\\\\.|[^'\\\\])*'/g], keywords: /(^|\n)\s*[A-Za-z_][\w.-]*(?=\s*=)/g, literals: /\b(?:true|false)\b/gi, numbers: /\b\d+(?:\.\d+)?\b/g } });
+
 function highlightCode(source, language) {
   if (language === "json" || language === "yaml" || language === "toml") {
     return highlightStructured(source, language);
@@ -573,15 +575,17 @@ async function openFile(name) {
 
   const pre = document.createElement("pre");
   pre.className = "code-viewer";
+
+  let displayText = text;
   if (kind === "json") {
     try {
-      pre.textContent = JSON.stringify(JSON.parse(text), null, 2);
+      displayText = JSON.stringify(JSON.parse(text), null, 2);
     } catch {
-      pre.textContent = text;
+      displayText = text;
     }
-  } else {
-    pre.textContent = text;
   }
+
+  pre.innerHTML = highlightCode(displayText, kind);
   fileViewer.innerHTML = "";
   fileViewer.appendChild(pre);
 }
