@@ -263,6 +263,22 @@ h1 {
 .viewer-empty { height:100%;display:grid;place-content:center;text-align:center;padding:30px;color:#6d737e;gap:8px; }
 .viewer-empty strong { color:#aeb5c1;font-size:16px; }
 .viewer-empty span { max-width:430px;font-size:13px;line-height:1.5; }
+
+.code-viewer .tok-comment,
+.code-viewer .tok-comment * { opacity: 0.62; }
+.code-viewer .tok-string { color: #a5d6ff; }
+.code-viewer .tok-keyword { color: #ff7ab2; }
+.code-viewer .tok-literal { color: #c792ea; }
+.code-viewer .tok-number { color: #f2c777; }
+.code-viewer .tok-property { color: #7dd3fc; }
+.code-viewer .tok-comment { color: #7f8c98; }
+.code-viewer .tok-keyword,
+.code-viewer .tok-literal,
+.code-viewer .tok-number,
+.code-viewer .tok-property,
+.code-viewer .tok-string,
+.code-viewer .tok-comment { font-weight: 500; }
+
 .code-viewer {
   margin:0;padding:18px 20px;min-height:100%;white-space:pre-wrap;word-break:break-word;
   color:#d8dce3;font:13px/1.65 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;
