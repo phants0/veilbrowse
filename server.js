@@ -590,22 +590,23 @@ app.get("/search", async (req, res) => {
 
   const providers = [
     {
+      name: "Bing RSS",
+      url: "https://www.bing.com/search?format=rss&q=" + encodeURIComponent(query),
+      headers: {
+        "User-Agent": "VeilBrowse/1.0",
+        "Accept": "application/rss+xml, application/xml, text/xml;q=0.9"
+      },
+      format: "xml"
+    },
+    {
       name: "DuckDuckGo",
       url: "https://lite.duckduckgo.com/lite/?q=" + encodeURIComponent(query),
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml",
         "Accept-Language": "en-US,en;q=0.9"
-      }
-    },
-    {
-      name: "DuckDuckGo HTML",
-      url: "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query),
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml",
-        "Accept-Language": "en-US,en;q=0.9"
-      }
+      },
+      format: "html"
     },
     {
       name: "Bing",
@@ -614,7 +615,8 @@ app.get("/search", async (req, res) => {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml",
         "Accept-Language": "en-US,en;q=0.9"
-      }
+      },
+      format: "html"
     }
   ];
 
@@ -805,7 +807,20 @@ cards +
 
       const { load } = await import("cheerio");
       const $ = load(html, { decodeEntities: false });
-      const results = extractResults($, provider.name);
+
+      let results;
+      if (provider.format === "xml") {
+        results = [];
+        $("item").each((_, item) => {
+          const title = $(item).find("title").first().text();
+          const href = $(item).find("link").first().text().trim();
+          const snippet = $(item).find("description").first().text();
+          if (title && href) results.push({ title, href, snippet });
+        });
+        results = results.slice(0, 20);
+      } else {
+        results = extractResults($, provider.name);
+      }
 
       if (results.length === 0) {
         lastError = new Error(provider.name + " returned no parseable results");
