@@ -85,24 +85,59 @@ form?.addEventListener("submit", (event) => {
 });
 
 const FILE_TYPES = {
-  js: "script",
-  mjs: "script",
+  js: "javascript",
+  mjs: "javascript",
+  cjs: "javascript",
+  ts: "typescript",
+  tsx: "typescript",
+  jsx: "javascript",
+  py: "python",
+  pyw: "python",
+  java: "java",
+  c: "c",
+  h: "c",
+  cpp: "cpp",
+  cc: "cpp",
+  cxx: "cpp",
+  hpp: "cpp",
+  cs: "csharp",
+  go: "go",
+  rs: "rust",
+  rb: "ruby",
+  php: "php",
+  swift: "swift",
+  kt: "kotlin",
+  kts: "kotlin",
+  scala: "scala",
+  sh: "shell",
+  bash: "shell",
+  zsh: "shell",
+  ps1: "powershell",
+  sql: "sql",
+  css: "css",
+  scss: "css",
+  less: "css",
   html: "html",
   htm: "html",
-  css: "css",
+  xml: "xml",
+  svg: "image",
   json: "json",
-  xml: "text",
+  jsonc: "json",
+  yaml: "yaml",
+  yml: "yaml",
+  toml: "toml",
+  md: "markdown",
+  markdown: "markdown",
   txt: "text",
-  md: "text",
-  ts: "text",
+  csv: "csv",
   pdf: "pdf",
   png: "image",
   jpg: "image",
   jpeg: "image",
   gif: "image",
   webp: "image",
-  svg: "image",
-  bmp: "image"
+  bmp: "image",
+  wasm: "wasm"
 };
 
 function extension(name) {
@@ -117,14 +152,170 @@ function kindOf(file) {
   return FILE_TYPES[ext] || "unknown";
 }
 
+const LANGUAGE_LABELS = {
+  javascript: "JavaScript",
+  typescript: "TypeScript",
+  python: "Python",
+  java: "Java",
+  c: "C",
+  cpp: "C++",
+  csharp: "C#",
+  go: "Go",
+  rust: "Rust",
+  ruby: "Ruby",
+  php: "PHP",
+  swift: "Swift",
+  kotlin: "Kotlin",
+  scala: "Scala",
+  shell: "Shell",
+  powershell: "PowerShell",
+  sql: "SQL",
+  css: "CSS",
+  html: "HTML",
+  xml: "XML",
+  json: "JSON",
+  yaml: "YAML",
+  toml: "TOML",
+  markdown: "Markdown",
+  csv: "CSV",
+  text: "Text",
+  wasm: "WebAssembly",
+  image: "Image",
+  pdf: "PDF",
+  unknown: "Unknown"
+};
+
+const RUNNABLE_KINDS = new Set(["javascript", "html"]);
+
+function displayKind(kind) {
+  return LANGUAGE_LABELS[kind] || kind.toUpperCase();
+}
+
 function isRunnable(file) {
-  return ["script", "html"].includes(kindOf(file));
+  return RUNNABLE_KINDS.has(kindOf(file));
 }
 
 function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[char]));
+}
+
+const HIGHLIGHT_RULES = {
+  javascript: {
+    comments: [/\/\/[^\\n]*/g, /\/\*[\\s\\S]*?\*\//g],
+    strings: [/"(?:\\\\.|[^"\\\\])*"/g, /'(?:\\\\.|[^'\\\\])*'/g, /\`(?:\\\\.|[^\`\\\\])*\`/g],
+    keywords: /\b(?:as|async|await|break|case|catch|class|const|continue|debugger|default|delete|do|else|export|extends|finally|for|from|function|get|if|import|in|instanceof|let|new|of|return|set|static|super|switch|this|throw|try|typeof|var|void|while|with|yield)\b/g,
+    literals: /\b(?:true|false|null|undefined|NaN|Infinity)\b/g,
+    numbers: /\b(?:0x[\da-f]+|0b[01]+|0o[0-7]+|(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)\b/gi
+  },
+  typescript: {
+    comments: [/\/\/[^\\n]*/g, /\/\*[\\s\\S]*?\*\//g],
+    strings: [/"(?:\\\\.|[^"\\\\])*"/g, /'(?:\\\\.|[^'\\\\])*'/g, /\`(?:\\\\.|[^\`\\\\])*\`/g],
+    keywords: /\b(?:as|async|await|break|case|catch|class|const|continue|declare|default|delete|do|else|enum|export|extends|finally|for|from|function|if|implements|import|in|infer|interface|keyof|let|module|namespace|new|of|private|protected|public|readonly|return|static|super|switch|this|throw|try|type|typeof|var|void|while|with|yield)\b/g,
+    literals: /\b(?:true|false|null|undefined|never|unknown|any|void)\b/g,
+    numbers: /\b(?:0x[\da-f]+|0b[01]+|0o[0-7]+|(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)\b/gi
+  },
+  python: {
+    comments: /#[^\\n]*/g,
+    strings: [/"(?:\\\\.|[^"\\\\])*"/g, /'(?:\\\\.|[^'\\\\])*'/g, /"""[\\s\\S]*?"""/g, /'''[\\s\\S]*?'''/g],
+    keywords: /\b(?:and|as|assert|async|await|break|case|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|match|nonlocal|not|or|pass|raise|return|try|while|with|yield)\b/g,
+    literals: /\b(?:True|False|None|NotImplemented|Ellipsis)\b/g,
+    numbers: /\b(?:0x[\da-f]+|0b[01]+|0o[0-7]+|(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)\b/gi
+  },
+  java: { comments: [/\/\/[^\\n]*/g, /\/\*[\\s\\S]*?\*\//g], strings: [/"(?:\\\\.|[^"\\\\])*"/g, /'(?:\\\\.|[^'\\\\])*'/g], keywords: /\b(?:abstract|assert|boolean|break|byte|case|catch|char|class|const|continue|default|do|double|else|enum|extends|final|finally|float|for|if|implements|import|instanceof|int|interface|long|native|new|package|private|protected|public|return|short|static|strictfp|super|switch|synchronized|this|throw|throws|transient|try|void|volatile|while)\b/g, literals: /\b(?:true|false|null)\b/g, numbers: /\b\d+(?:\.\d+)?[fLd]?\b/gi },
+  c: { comments: [/\/\/[^\\n]*/g, /\/\*[\\s\\S]*?\*\//g], strings: [/"(?:\\\\.|[^"\\\\])*"/g, /'(?:\\\\.|[^'\\\\])*'/g], keywords: /\b(?:auto|break|case|char|const|continue|default|do|double|else|enum|extern|float|for|goto|if|inline|int|long|register|restrict|return|short|signed|sizeof|static|struct|switch|typedef|union|unsigned|void|volatile|while)\b/g, literals: /\b(?:true|false|NULL)\b/g, numbers: /\b(?:0x[\da-f]+|\d+(?:\.\d+)?)[uUlLfF]*\b/gi },
+  cpp: { comments: [/\/\/[^\\n]*/g, /\/\*[\\s\\S]*?\*\//g], strings: [/"(?:\\\\.|[^"\\\\])*"/g, /'(?:\\\\.|[^'\\\\])*'/g], keywords: /\b(?:alignas|auto|bool|break|case|catch|char|class|const|constexpr|continue|default|delete|do|double|else|enum|explicit|export|extern|false|float|for|friend|if|inline|int|long|namespace|new|nullptr|operator|private|protected|public|return|short|signed|sizeof|static|struct|switch|template|this|throw|true|try|typedef|typename|union|unsigned|using|virtual|void|volatile|while)\b/g, literals: /\b(?:true|false|nullptr)\b/g, numbers: /\b(?:0x[\da-f]+|0b[01]+|\d+(?:\.\d+)?)[uUlLfF]*\b/gi },
+  csharp: { comments: [/\/\/[^\\n]*/g, /\/\*[\\s\\S]*?\*\//g], strings: [@"(?:\\\\.|[^"\\\\])*".replace("@",""), /"(?:\\\\.|[^"\\\\])*"/g], keywords: /\b(?:abstract|as|base|bool|break|byte|case|catch|char|class|const|continue|decimal|default|delegate|do|double|else|enum|event|explicit|extern|false|finally|fixed|float|for|foreach|if|implicit|in|int|interface|internal|is|lock|long|namespace|new|null|object|operator|out|override|params|private|protected|public|readonly|ref|return|sbyte|sealed|short|sizeof|stackalloc|static|string|struct|switch|this|throw|true|try|typeof|uint|ulong|unchecked|unsafe|ushort|using|virtual|void|volatile|while)\b/g, literals: /\b(?:true|false|null)\b/g, numbers: /\b\d+(?:\.\d+)?[fDmM]?\b/gi },
+  go: { comments: [/\/\/[^\\n]*/g, /\/\*[\\s\\S]*?\*\//g], strings: [/"(?:\\\\.|[^"\\\\])*"/g, /\`[\\s\\S]*?\`/g], keywords: /\b(?:break|case|chan|const|continue|default|defer|else|fallthrough|for|func|go|goto|if|import|interface|map|package|range|return|select|struct|switch|type|var)\b/g, literals: /\b(?:true|false|nil|iota)\b/g, numbers: /\b(?:0x[\da-f]+|0b[01]+|\d+(?:\.\d+)?)\b/gi },
+  rust: { comments: [/\/\/[^\\n]*/g, /\/\*[\\s\\S]*?\*\//g], strings: [/"(?:\\\\.|[^"\\\\])*"/g, /r#*"[^"]*"#*/g], keywords: /\b(?:as|async|await|break|const|continue|crate|dyn|else|enum|extern|fn|for|if|impl|in|let|loop|match|mod|move|mut|pub|ref|return|self|Self|static|struct|super|trait|type|unsafe|use|where|while)\b/g, literals: /\b(?:true|false|Some|None)\b/g, numbers: /\b(?:0x[\da-f]+|0b[01]+|\d+(?:\.\d+)?)\b/gi },
+  ruby: { comments: /#[^\\n]*/g, strings: [/"(?:\\\\.|[^"\\\\])*"/g, /'(?:\\\\.|[^'\\\\])*'/g], keywords: /\b(?:alias|and|begin|break|case|class|def|defined|do|else|elsif|end|ensure|false|for|if|in|module|next|nil|not|or|redo|rescue|retry|return|self|super|then|true|undef|unless|until|when|while|yield)\b/g, literals: /\b(?:true|false|nil)\b/g, numbers: /\b\d+(?:\.\d+)?\b/g },
+  php: { comments: [/\/\/[^\\n]*/g, /#[^\\n]*/g, /\/\*[\\s\\S]*?\*\//g], strings: [/"(?:\\\\.|[^"\\\\])*"/g, /'(?:\\\\.|[^'\\\\])*'/g], keywords: /\b(?:abstract|and|array|as|break|callable|case|catch|class|const|continue|default|do|echo|else|elseif|empty|extends|final|finally|fn|for|foreach|function|global|if|implements|include|interface|namespace|new|null|or|private|protected|public|require|return|static|switch|throw|trait|try|use|var|while|yield)\b/g, literals: /\b(?:true|false|null)\b/g, numbers: /\b\d+(?:\.\d+)?\b/g },
+  swift: { comments: [/\/\/[^\\n]*/g, /\/\*[\\s\\S]*?\*\//g], strings: [/"(?:\\\\.|[^"\\\\])*"/g], keywords: /\b(?:actor|associatedtype|break|case|catch|class|continue|defer|deinit|do|else|enum|extension|fallthrough|for|func|guard|if|import|in|indirect|init|inout|internal|is|let|mutating|nil|open|operator|private|protocol|public|repeat|return|self|static|struct|subscript|super|switch|throw|try|typealias|var|while)\b/g, literals: /\b(?:true|false|nil)\b/g, numbers: /\b\d+(?:\.\d+)?\b/g },
+  kotlin: { comments: [/\/\/[^\\n]*/g, /\/\*[\\s\\S]*?\*\//g], strings: [/"(?:\\\\.|[^"\\\\])*"/g, /"""[\\s\\S]*?"""/g], keywords: /\b(?:as|break|class|continue|do|else|false|for|fun|if|in|interface|is|null|object|package|return|super|this|throw|true|try|typealias|typeof|val|var|when|while)\b/g, literals: /\b(?:true|false|null)\b/g, numbers: /\b\d+(?:\.\d+)?\b/g },
+  scala: { comments: [/\/\/[^\\n]*/g, /\/\*[\\s\\S]*?\*\//g], strings: [/"(?:\\\\.|[^"\\\\])*"/g], keywords: /\b(?:abstract|case|catch|class|def|do|else|extends|false|final|finally|for|forSome|if|implicit|import|lazy|match|new|null|object|override|package|private|protected|return|sealed|super|this|throw|trait|try|true|type|val|var|while|with|yield)\b/g, literals: /\b(?:true|false|null)\b/g, numbers: /\b\d+(?:\.\d+)?\b/g },
+  shell: { comments: /#[^\\n]*/g, strings: [/"(?:\\\\.|[^"\\\\])*"/g, /'(?:\\\\.|[^'\\\\])*'/g], keywords: /\b(?:if|then|else|elif|fi|for|in|do|done|case|esac|while|function|select|until)\b/g, literals: /\b(?:true|false)\b/g, numbers: /\b\d+\b/g },
+  powershell: { comments: /#[^\\n]*/g, strings: [/"(?:\\\\.|[^"\\\\])*"/g, /'(?:\\\\.|[^'\\\\])*'/g], keywords: /\b(?:begin|break|catch|class|continue|data|define|do|dynamicparam|else|elseif|end|exit|filter|finally|for|foreach|from|function|if|in|param|process|return|switch|throw|trap|try|until|using|while)\b/gi, literals: /\b(?:true|false|null)\b/gi, numbers: /\b\d+(?:\.\d+)?\b/g },
+  sql: { comments: [/--[^\\n]*/g, /\/\*[\\s\\S]*?\*\//g], strings: [/'(?:''|[^'])*'/g, /"(?:\\"|[^"])*"/g], keywords: /\b(?:select|from|where|insert|into|values|update|set|delete|create|alter|drop|table|index|join|inner|left|right|full|outer|on|as|and|or|not|null|is|in|between|like|group|by|order|having|limit|offset|distinct|union|all|case|when|then|else|end|primary|key|foreign|references|view|database)\b/gi, literals: /\b(?:true|false|null)\b/gi, numbers: /\b\d+(?:\.\d+)?\b/g
+  }
+};
+
+function highlightCode(source, language) {
+  if (language === "json" || language === "yaml" || language === "toml") {
+    return highlightStructured(source, language);
+  }
+
+  const rules = HIGHLIGHT_RULES[language];
+  if (!rules) return escapeHtml(source);
+
+  const tokens = [];
+  const stash = (html, className) => {
+    const id = tokens.length;
+    tokens.push('<span class="tok-' + className + '">' + html + '</span>');
+    return " " + id + " ";
+  };
+
+  let value = escapeHtml(source);
+
+  const patterns = [];
+  (rules.comments || []).forEach((pattern) => patterns.push(["comment", pattern]));
+  (rules.strings || []).forEach((pattern) => patterns.push(["string", pattern]));
+  if (rules.keywords) patterns.push(["keyword", rules.keywords]);
+  if (rules.literals) patterns.push(["literal", rules.literals]);
+  if (rules.numbers) patterns.push(["number", rules.numbers]);
+
+  // Protect comments/strings first, then highlight syntax in the remaining text.
+  for (const [className, pattern] of patterns.slice(0, (rules.comments || []).length + (rules.strings || []).length)) {
+    value = value.replace(pattern, (match) => stash(match, className));
+  }
+
+  const rest = value.replace(/ d+ /g, "");
+  const placeholders = value.match(/ d+ /g) || [];
+  const rebuilt = rest.replace(rules.keywords || /(?!)/g, (match) => stash(match, "keyword"))
+    .replace(rules.literals || /(?!)/g, (match) => stash(match, "literal"))
+    .replace(rules.numbers || /(?!)/g, (match) => stash(match, "number"));
+
+  let output = rebuilt;
+  let index = 0;
+  output = value.replace(/ d+ |[sS]+/g, (part) => {
+    if (/^ d+ $/.test(part)) return tokens[Number(part.slice(1, -1))];
+    const highlighted = part.replace(rules.keywords || /(?!)/g, (match) => stash(match, "keyword"))
+      .replace(rules.literals || /(?!)/g, (match) => stash(match, "literal"))
+      .replace(rules.numbers || /(?!)/g, (match) => stash(match, "number"));
+    index++;
+    return highlighted;
+  });
+
+  return output;
+}
+
+function highlightStructured(source, language) {
+  let html = escapeHtml(source);
+  if (language === "json") {
+    html = html
+      .replace(/(&quot;(?:\\.|[^&])*?&quot;)(\s*:)/g, '<span class="tok-property">$1</span>$2')
+      .replace(/(&quot;(?:\\.|[^&])*?&quot;)/g, '<span class="tok-string">$1</span>')
+      .replace(/\b(true|false|null)\b/g, '<span class="tok-literal">$1</span>')
+      .replace(/\b-?\d+(?:\.\d+)?(?:e[+-]?\d+)?\b/gi, '<span class="tok-number">function escapeHtml(value) {
   return value.replace(/[&<>"']/g, (char) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
   }[char]));
+}</span>');
+  } else {
+    html = html
+      .replace(/(^|\n)(\s*)([A-Za-z_][\w.-]*)(\s*:)/g, '$1$2<span class="tok-property">$3</span>$4')
+      .replace(/(["'])(?:\\.|(?!\1).)*\1/g, '<span class="tok-string">function escapeHtml(value) {
+  return value.replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[char]));
+}</span>')
+      .replace(/\b(?:true|false|null|yes|no)\b/gi, '<span class="tok-literal">function escapeHtml(value) {
+  return value.replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[char]));
+}</span>');
+  }
+  return html;
 }
 
 function logConsole(message, type = "log") {
@@ -186,7 +377,7 @@ function renderFileList() {
 
       const badge = document.createElement("span");
       badge.className = "file-badge";
-      badge.textContent = kindOf(file);
+      badge.textContent = displayKind(kindOf(file));
 
       row.append(check, name, badge);
       row.addEventListener("click", (event) => {
@@ -343,7 +534,7 @@ async function openFile(name) {
   renderFileList();
 
   const kind = kindOf(file);
-  activeFileType.textContent = kind.toUpperCase();
+  activeFileType.textContent = displayKind(kind);
 
   if (kind === "image") {
     const url = URL.createObjectURL(file);
