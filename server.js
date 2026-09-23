@@ -632,7 +632,7 @@ app.get("/search-debug", async (req, res) => {
       const body = await upstream.text();
       const preview = body.replace(/\s+/g, " ").slice(0, 180);
 
-      diagnostics.push({
+      const diagnostic = {
         provider: provider.name,
         ok: upstream.ok,
         status: upstream.status,
@@ -642,7 +642,31 @@ app.get("/search-debug", async (req, res) => {
         looksLikeXml: /<rss|<feed|<item/i.test(body),
         hasChallengeWords: /(captcha|unusual traffic|access denied|robot|automated)/i.test(body),
         preview
-      });
+      };
+
+      if (provider.name === "Bing RSS" && upstream.ok) {
+        try {
+          const { load } = await import("cheerio");
+          const xmlDefault = load(body, { decodeEntities: true });
+          const xmlRecommended = load(body, { xml: true });
+          const summarize = ($) => {
+            const items = [];
+            $("item, entry").each((_, item) => {
+              const title = $(item).find("title").first().text().trim();
+              let href = $(item).find("link").first().text().trim();
+              if (!href) href = $(item).find("link[href]").first().attr("href") || "";
+              if (title && href) items.push({ title: title.slice(0, 120), href: href.slice(0, 300) });
+            });
+            return { itemNodes: $("item, entry").length, parseableItems: items.length, firstItems: items.slice(0, 3) };
+          };
+          diagnostic.parserDefault = summarize(xmlDefault);
+          diagnostic.parserRecommended = summarize(xmlRecommended);
+        } catch (parserError) {
+          diagnostic.parserError = String(parserError?.message || parserError);
+        }
+      }
+
+      diagnostics.push(diagnostic);
     } catch (error) {
       diagnostics.push({
         provider: provider.name,
