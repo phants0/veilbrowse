@@ -295,27 +295,16 @@ function highlightStructured(source, language) {
   let html = escapeHtml(source);
   if (language === "json") {
     html = html
-      .replace(/(&quot;(?:\\.|[^&])*?&quot;)(\s*:)/g, '<span class="tok-property">$1</span>$2')
-      .replace(/(&quot;(?:\\.|[^&])*?&quot;)/g, '<span class="tok-string">$1</span>')
-      .replace(/\b(true|false|null)\b/g, '<span class="tok-literal">$1</span>')
-      .replace(/\b-?\d+(?:\.\d+)?(?:e[+-]?\d+)?\b/gi, '<span class="tok-number">function escapeHtml(value) {
-  return value.replace(/[&<>"']/g, (char) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-  }[char]));
-}</span>');
+      .replace(/(&quot;(?:\\\\.|[^&])*?&quot;)(\\s*:)/g, '<span class="tok-property">$1</span>$2')
+      .replace(/(&quot;(?:\\\\.|[^&])*?&quot;)/g, '<span class="tok-string">$1</span>')
+      .replace(/\\b(true|false|null)\\b/g, '<span class="tok-literal">$1</span>')
+      .replace(/\\b-?\\d+(?:\\.\\d+)?(?:e[+-]?\\d+)?\\b/gi, '<span class="tok-number">$1</span>');
   } else {
     html = html
-      .replace(/(^|\n)(\s*)([A-Za-z_][\w.-]*)(\s*:)/g, '$1$2<span class="tok-property">$3</span>$4')
-      .replace(/(["'])(?:\\.|(?!\1).)*\1/g, '<span class="tok-string">function escapeHtml(value) {
-  return value.replace(/[&<>"']/g, (char) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-  }[char]));
-}</span>')
-      .replace(/\b(?:true|false|null|yes|no)\b/gi, '<span class="tok-literal">function escapeHtml(value) {
-  return value.replace(/[&<>"']/g, (char) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-  }[char]));
-}</span>');
+      .replace(/(^|\\n)(\\s*)([A-Za-z_][\\w.-]*)(\\s*:)/g, '$1$2<span class="tok-property">$3</span>$4')
+      .replace(/(&quot;(?:\\\\.|[^&])*?&quot;|&#39;(?:\\\\.|[^&])*?&#39;)/g, '<span class="tok-string">$1</span>')
+      .replace(/\\b(?:true|false|null|yes|no)\\b/gi, '<span class="tok-literal">$&</span>')
+      .replace(/\\b-?\\d+(?:\\.\\d+)?\\b/g, '<span class="tok-number">$&</span>');
   }
   return html;
 }
@@ -697,7 +686,6 @@ function stopScripts() {
   logConsole("Execution stopped.", "system");
 }
 
-openFilesButton?.addEventListener("click", () => localFilesInput.click());
 addFilesButton?.addEventListener("click", () => localFilesInput.click());
 localFilesInput?.addEventListener("change", () => {
   addFiles([...localFilesInput.files]);
