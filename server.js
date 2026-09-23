@@ -879,7 +879,7 @@ app.get("/search", async (req, res) => {
 '.search-toggle:focus-visible{outline:2px solid #8ab4ff;outline-offset:2px}' +
 'input{width:100%;height:40px;border:1px solid #30343d;border-radius:10px;background:#111318;color:#fff;padding:0 14px;font:inherit;outline:none}' +
 'input:focus{border-color:#687386;box-shadow:0 0 0 3px rgba(120,130,150,.14)}' +
-'button{height:40px;border:0;border-radius:10px;padding:0 16px;background:#f4f4f5;color:#090a0c;font:600 14px inherit;cursor:pointer}' +
+'button{height:40px;border:0;border-radius:10px;padding:0 16px;background:#f4f4f5;color:#090a0c;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer}' +
 'main{max-width:980px;margin:0 auto;padding:30px 20px 60px}' +
 '.meta{color:#8d94a1;font-size:13px;margin-bottom:20px}' +
 '.provider{color:#6f7785}' +
