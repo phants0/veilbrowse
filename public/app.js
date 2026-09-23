@@ -332,8 +332,8 @@ function setRunning(value) {
   running = value;
   consoleState.textContent = value ? "Running" : "Idle";
   consoleState.classList.toggle("running", value);
-  runSelectedButton.disabled = value || ![...files.values()].some((file) => file.selected && kindOf(file) === "script");
-  runAllButton.disabled = value || ![...files.values()].some((file) => kindOf(file) === "script");
+  runSelectedButton.disabled = value || ![...files.values()].some((file) => file.selected && kindOf(file) === "javascript");
+  runAllButton.disabled = value || ![...files.values()].some((file) => kindOf(file) === "javascript");
   stopScriptsButton.disabled = !value;
 }
 
@@ -357,7 +357,7 @@ function renderFileList() {
   for (const [group, groupFiles] of groups) {
     const heading = document.createElement("div");
     heading.className = "file-group-heading";
-    heading.textContent = group === "script" ? "Scripts" : group.charAt(0).toUpperCase() + group.slice(1);
+    heading.textContent = group === "javascript" ? "JavaScript" : group.charAt(0).toUpperCase() + group.slice(1);
     fileList.appendChild(heading);
 
     for (const file of groupFiles) {
@@ -367,7 +367,7 @@ function renderFileList() {
       const check = document.createElement("input");
       check.type = "checkbox";
       check.checked = file.selected;
-      check.disabled = kindOf(file) !== "script";
+      check.disabled = kindOf(file) !== "javascript";
       check.addEventListener("change", () => {
         file.selected = check.checked;
         updateRunButtons();
@@ -395,8 +395,8 @@ function renderFileList() {
 
 function updateRunButtons() {
   const scripts = [...files.values()];
-  runSelectedButton.disabled = running || !scripts.some((file) => file.selected && kindOf(file) === "script");
-  runAllButton.disabled = running || !scripts.some((file) => kindOf(file) === "script");
+  runSelectedButton.disabled = running || !scripts.some((file) => file.selected && kindOf(file) === "javascript");
+  runAllButton.disabled = running || !scripts.some((file) => kindOf(file) === "javascript");
 }
 
 
@@ -452,7 +452,7 @@ async function buildHtmlProject(file) {
   const scriptPattern = /<script\b([^>]*?)\bsrc\s*=\s*["']([^"']+)["']([^>]*)>\s*<\/script\s*>/gi;
   html = html.replace(scriptPattern, (full, before, src, after) => {
     const dependency = findWorkspaceFile(src, file.name);
-    if (!dependency || kindOf(dependency) !== "script") return full;
+    if (!dependency || kindOf(dependency) !== "javascript") return full;
 
     linkedFiles.add(dependency.name);
     scripts.push({ name: dependency.name, source: null, attrs: before + after });
@@ -592,7 +592,7 @@ async function openFile(name) {
 function addFiles(fileArray) {
   for (const file of fileArray) {
     files.set(file.name, Object.assign(file, {
-      selected: kindOf(file) === "script"
+      selected: kindOf(file) === "javascript"
     }));
   }
   if (!activeFileName && fileArray[0]) activeFileName = fileArray[0].name;
@@ -605,7 +605,7 @@ async function runScripts(selectedOnly) {
   if (running) return;
 
   const scripts = [...files.values()].filter((file) =>
-    kindOf(file) === "script" && (!selectedOnly || file.selected)
+    kindOf(file) === "javascript" && (!selectedOnly || file.selected)
   );
 
   if (!scripts.length) return;
@@ -713,7 +713,7 @@ clearConsoleButton?.addEventListener("click", () => {
 });
 selectAllButton?.addEventListener("click", () => {
   for (const file of files.values()) {
-    if (kindOf(file) === "script") file.selected = true;
+    if (kindOf(file) === "javascript") file.selected = true;
   }
   renderFileList();
 });
