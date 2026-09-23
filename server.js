@@ -128,9 +128,9 @@ function cookieMatches(cookie, target) {
 function getCookieHeader(session, target) {
   const parts = [];
 
-  for (const [key, cookie] of session.cookies) {
+  for (const cookie of session.cookies.values()) {
     if (cookieMatches(cookie, target)) {
-      parts.push(key.split("\n")[0] + "=" + cookie.value);
+      parts.push(cookie.name + "=" + cookie.value);
     }
   }
 
@@ -426,9 +426,7 @@ async function rewriteHtml(html, baseUrl) {
     ["object", "data"],
     ["form", "action"],
     ["input", "src"],
-    ["track", "src"],
-    ["iframe", "srcdoc"],
-    ["meta", "content"]
+    ["track", "src"]
   ];
 
   for (const [selector, attribute] of urlAttributes) {
@@ -445,10 +443,6 @@ async function rewriteHtml(html, baseUrl) {
         return;
       }
 
-      if (attribute === "content" && !$(element).is('meta[http-equiv="refresh" i]')) {
-        return;
-      }
-
       $(element).attr(attribute, proxyUrl(value, baseUrl));
     });
   }
@@ -456,6 +450,25 @@ async function rewriteHtml(html, baseUrl) {
   $("[srcset]").each((_, element) => {
     const value = $(element).attr("srcset");
     if (value) $(element).attr("srcset", rewriteSrcset(value, baseUrl));
+  });
+
+  $("meta[http-equiv]").each((_, element) => {
+    const httpEquiv = ($(element).attr("http-equiv") || "").toLowerCase();
+
+    if (httpEquiv === "content-security-policy") {
+      $(element).remove();
+      return;
+    }
+
+    if (httpEquiv === "refresh") {
+      const value = $(element).attr("content") || "";
+      const match = value.match(/^(\s*\d+\s*;\s*url\s*=\s*)(.*)$/i);
+
+      if (match) {
+        const rawTarget = match[2].trim().replace(/^['"]|['"]$/g, "");
+        $(element).attr("content", match[1] + proxyUrl(rawTarget, baseUrl));
+      }
+    }
   });
 
   $("link[href]").each((_, element) => {
