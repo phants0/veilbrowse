@@ -11,6 +11,7 @@ const fileViewer = document.querySelector("#fileViewer");
 const activeFileType = document.querySelector("#activeFileType");
 const runSelectedButton = document.querySelector("#runSelected");
 const runAllButton = document.querySelector("#runAll");
+const stopScriptsButton = document.querySelector("#stopScripts");
 const clearConsoleButton = document.querySelector("#clearConsole");
 const selectAllButton = document.querySelector("#selectAllFiles");
 const consoleOutput = document.querySelector("#consoleOutput");
@@ -123,6 +124,7 @@ function setRunning(value) {
   consoleState.classList.toggle("running", value);
   runSelectedButton.disabled = value || ![...files.values()].some((file) => file.selected && kindOf(file) === "script");
   runAllButton.disabled = value || ![...files.values()].some((file) => kindOf(file) === "script");
+  stopScriptsButton.disabled = !value;
 }
 
 function renderFileList() {
@@ -348,6 +350,7 @@ localFilesInput?.addEventListener("change", () => {
 
 runSelectedButton?.addEventListener("click", () => runScripts(true));
 runAllButton?.addEventListener("click", () => runScripts(false));
+stopScriptsButton?.addEventListener("click", stopScripts);
 clearConsoleButton?.addEventListener("click", () => {
   consoleOutput.textContent = "";
   consoleState.textContent = "Idle";
