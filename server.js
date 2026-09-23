@@ -682,7 +682,7 @@ app.get("/search", async (req, res) => {
 });
 
 app.all("/proxy", async (req, res) => {
-  const rawUrl = typeof req.query.url === "string" ? req.query.url : "";
+  const rawUrl = typeof req.query.url === "string" ? req.query.url.trim() : "";
 
   if (!rawUrl) {
     return res.status(400).send("Missing URL");
@@ -690,6 +690,12 @@ app.all("/proxy", async (req, res) => {
 
   if (!["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"].includes(req.method)) {
     return res.status(405).send("Method not supported");
+  }
+
+  // Compatibility fallback for cached clients that send a plain search term
+  // through /proxy. Never attempt DNS on a search term.
+  if (!/^https?:\/\//i.test(rawUrl)) {
+    return res.redirect("/search?q=" + encodeURIComponent(rawUrl));
   }
 
   let target;
