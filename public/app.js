@@ -94,7 +94,8 @@ function kindOf(file) {
   if (["js", "mjs"].includes(ext)) return "script";
   if (ext === "html" || ext === "htm") return "html";
   if (ext === "css") return "css";
-  if (["json", "xml", "txt", "md", "ts"].includes(ext)) return "text";
+  if (ext === "json") return "json";
+  if (["xml", "txt", "md", "ts"].includes(ext)) return "text";
   if (["pdf"].includes(ext)) return "pdf";
   if (["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"].includes(ext)) return "image";
   return "unknown";
@@ -234,7 +235,15 @@ async function openFile(name) {
 
   const pre = document.createElement("pre");
   pre.className = "code-viewer";
-  pre.textContent = text;
+  if (kind === "json") {
+    try {
+      pre.textContent = JSON.stringify(JSON.parse(text), null, 2);
+    } catch {
+      pre.textContent = text;
+    }
+  } else {
+    pre.textContent = text;
+  }
   fileViewer.innerHTML = "";
   fileViewer.appendChild(pre);
 }
