@@ -841,7 +841,7 @@ app.get("/search", async (req, res) => {
     return results.slice(0, 20);
   }
 
-  function renderSearchPage(results) {
+  function renderSearchPage(results, providerName) {
     const cards = results.length
       ? results.map((result) => {
           const proxied = proxyUrl(result.href, "https://veilbrowse.local/");
@@ -877,6 +877,7 @@ app.get("/search", async (req, res) => {
 'button{height:42px;border:0;border-radius:10px;padding:0 18px;background:#f4f4f5;color:#090a0c;font:600 14px inherit;cursor:pointer}' +
 'main{max-width:980px;margin:0 auto;padding:30px 20px 60px}' +
 '.meta{color:#8d94a1;font-size:13px;margin-bottom:20px}' +
+'.provider{color:#6f7785}' +
 '.result-card{padding:0 0 25px;margin-bottom:25px;border-bottom:1px solid #1d2026}' +
 '.result-url{font-size:12px;color:#7f8795;margin-bottom:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
 'h2{font-size:19px;line-height:1.35;margin:0 0 7px;font-weight:650}' +
@@ -888,13 +889,16 @@ app.get("/search", async (req, res) => {
 '</style></head><body>' +
 '<header class="top"><div class="nav">' +
 '<a class="brand" href="/">VEILBROWSE</a>' +
+'<div class="search-shell collapsed" id="searchShell">' +
 '<form action="/search" method="get">' +
 '<input name="q" value="' + escapeHtml(query) + '" aria-label="Search" autocomplete="off" spellcheck="false">' +
 '<button type="submit">Search</button>' +
-'</form></div></header>' +
-'<main><div class="meta">Search results for <strong>' + escapeHtml(query) + '</strong></div>' +
+'</form>' +
+'<button class="collapse" id="collapseSearch" type="button" aria-label="Expand search bar" aria-expanded="false">⌄</button>' +
+'</div></div></header>' +
+'<main><div class="meta">Search results for <strong>' + escapeHtml(query) + '</strong> <span class="provider">• Powered by ' + escapeHtml(providerName) + '</span></div>' +
 cards +
-'</main></body></html>';
+'</main><script>(function(){const shell=document.getElementById("searchShell");const button=document.getElementById("collapseSearch");const form=shell?.querySelector("form");if(!shell||!button)return;button.addEventListener("click",function(){const collapsed=shell.classList.toggle("collapsed");button.setAttribute("aria-expanded",String(!collapsed));button.setAttribute("aria-label",collapsed?"Expand search bar":"Collapse search bar");button.textContent=collapsed?"⌄":"⌃";if(!collapsed)form?.querySelector("input")?.focus();});})();</script></body></html>';
   }
 
   let lastError = null;
@@ -949,7 +953,7 @@ cards +
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       res.setHeader("Cache-Control", "no-store, private, max-age=0");
       res.setHeader("Referrer-Policy", "no-referrer");
-      return res.send(renderSearchPage(results));
+      return res.send(renderSearchPage(results, provider.name));
     } catch (error) {
       lastError = error;
     } finally {
