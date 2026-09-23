@@ -21,7 +21,7 @@ function normalizeUrl(value) {
   if (!trimmed) return null;
 
   try {
-    return new URL(trimmed.includes("://") ? trimmed : \`https://\${trimmed}\`);
+    return new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`);
   } catch {
     return null;
   }
@@ -37,7 +37,7 @@ form.addEventListener("submit", (event) => {
   }
 
   if (!looksLikeUrl(value)) {
-    window.location.href = \`/search?q=\${encodeURIComponent(value)}\`;
+    window.location.assign(`/search?q=${encodeURIComponent(value)}`);
     return;
   }
 
@@ -49,5 +49,5 @@ form.addEventListener("submit", (event) => {
   }
 
   input.setCustomValidity("");
-  window.location.href = \`/proxy?url=\${encodeURIComponent(url.href)}\`;
+  window.location.assign(`/proxy?url=${encodeURIComponent(url.href)}`);
 });
