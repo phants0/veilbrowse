@@ -625,20 +625,49 @@ app.get("/search", async (req, res) => {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
 
-  function extractResults($) {
+  function extractResults($, providerName) {
     const results = [];
+    const seen = new Set();
 
-    const add = (title, href, snippet) => {
+    const decodeDuckDuckGo = (href) => {
+      try {
+        const parsed = new URL(href, "https://duckduckgo.com/");
+        const encoded = parsed.searchParams.get("uddg");
+        return encoded ? decodeURIComponent(encoded) : parsed.href;
+      } catch {
+        return href;
+      }
+    };
+
+    const add = (title, href, snippet = "") => {
       if (!title || !href) return;
 
-      try {
-        const parsed = new URL(href);
-        if (!["http:", "https:"].includes(parsed.protocol)) return;
-        if (parsed.hostname.endsWith("duckduckgo.com") || parsed.hostname.endsWith("bing.com")) return;
+      let resolved = String(href).trim();
+      if (!resolved || resolved.startsWith("#") || resolved.startsWith("javascript:")) return;
 
-        const cleanTitle = title.trim();
-        const cleanSnippet = (snippet || "").trim();
-        if (!cleanTitle || results.some((item) => item.href === parsed.href)) return;
+      if (providerName.startsWith("DuckDuckGo")) {
+        resolved = decodeDuckDuckGo(resolved);
+      }
+
+      try {
+        const parsed = new URL(resolved, providerName === "Bing" ? "https://www.bing.com/" : "https://duckduckgo.com/");
+        if (!["http:", "https:"].includes(parsed.protocol)) return;
+
+        const hostname = parsed.hostname.toLowerCase();
+        if (
+          hostname === "duckduckgo.com" ||
+          hostname.endsWith(".duckduckgo.com") ||
+          hostname === "bing.com" ||
+          hostname.endsWith(".bing.com")
+        ) return;
+
+        const cleanTitle = String(title).replace(/\\s+/g, " ").trim();
+        const cleanSnippet = String(snippet || "").replace(/\\s+/g, " ").trim();
+        if (!cleanTitle || cleanTitle.length < 2) return;
+
+        const key = parsed.href;
+        if (seen.has(key)) return;
+        seen.add(key);
 
         results.push({
           title: cleanTitle,
@@ -648,27 +677,46 @@ app.get("/search", async (req, res) => {
       } catch {}
     };
 
-    $(".result").each((_, element) => {
-      const link = $(element).find("a.result__a, a.result-link").first();
-      const snippet = $(element).find(".result__snippet, .result-snippet").first();
+    // DuckDuckGo Lite / HTML.
+    $(".result, .web-result, .result.results_links").each((_, element) => {
+      const link = $(element).find("a.result__a, a.result-link, a.result__url").first();
+      const snippet = $(element).find(".result__snippet, .result-snippet, .result__body").first();
       if (link.length) add(link.text(), link.attr("href"), snippet.text());
     });
 
-    $("li.b_algo").each((_, element) => {
-      const link = $(element).find("h2 a").first();
-      const snippet = $(element).find(".b_caption p, p").first();
+    // Bing's normal result cards.
+    $("li.b_algo, #b_results li.b_algo, main li.b_algo").each((_, element) => {
+      const link = $(element).find("h2 a, h2 a[href]").first();
+      const snippet = $(element).find(".b_caption p, .b_snippet, p").first();
       if (link.length) add(link.text(), link.attr("href"), snippet.text());
     });
 
-    if (results.length === 0) {
-      $("a.result__a, a.result-link").each((_, element) => {
+    // Broader provider-specific fallback.
+    if (results.length === 0 && providerName === "Bing") {
+      $("h2 a[href], h3 a[href]").each((_, element) => {
         const link = $(element);
-        const container = link.closest(".result, tr");
+        const parent = link.closest("li, article, div");
         add(
           link.text(),
           link.attr("href"),
-          container.find(".result__snippet, .result-snippet").first().text()
+          parent.find(".b_caption p, .b_snippet, p").first().text()
         );
+        if (results.length >= 20) return false;
+      });
+    }
+
+    if (results.length === 0) {
+      $("a[href]").each((_, element) => {
+        const link = $(element);
+        const text = link.text().trim();
+        const href = link.attr("href") || "";
+        if (text.length < 4 || href.startsWith("#")) return;
+
+        const parentText = link.closest("div,li,article,td").text().trim();
+        const snippet = parentText.replace(text, "").trim();
+
+        add(text, href, snippet);
+        if (results.length >= 20) return false;
       });
     }
 
@@ -757,7 +805,7 @@ cards +
 
       const { load } = await import("cheerio");
       const $ = load(html, { decodeEntities: false });
-      const results = extractResults($);
+      const results = extractResults($, provider.name);
 
       if (results.length === 0) {
         lastError = new Error(provider.name + " returned no parseable results");
@@ -776,10 +824,16 @@ cards +
   }
 
   const reason = lastError?.name === "AbortError"
-    ? "Search provider timed out."
-    : "All search providers were unreachable from the proxy server.";
+    ? "Search provider timed out. Please try again."
+    : lastError?.message?.includes("no parseable results")
+      ? "The search provider responded, but VeilBrowse could not read its results. Please try again."
+      : "Search is temporarily unavailable from the proxy server. Please try again.";
 
-  return res.status(502).send(reason);
+  return res.status(502).send(
+    "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Search unavailable — VeilBrowse</title>" +
+    "<style>body{margin:0;background:#08090c;color:#f4f4f5;font-family:system-ui;padding:40px}main{max-width:760px;margin:auto}a{color:#8ab4ff}</style></head>" +
+    "<body><main><h1>Search unavailable</h1><p>" + escapeHtml(reason) + "</p><p><a href=\"/\">Back to VeilBrowse</a></p></main></body></html>"
+  );
 });
 app.all("/proxy", async (req, res) => {
   const rawUrl = typeof req.query.url === "string" ? req.query.url.trim() : "";
