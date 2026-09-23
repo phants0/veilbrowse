@@ -922,7 +922,9 @@ cards +
       }
 
       const { load } = await import("cheerio");
-      const $ = load(html, { decodeEntities: false });
+      const $ = provider.format === "xml"
+        ? load(html, { xml: true })
+        : load(html, { decodeEntities: false });
 
       let results;
       if (provider.format === "xml") {
