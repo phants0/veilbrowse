@@ -590,6 +590,16 @@ app.get("/search", async (req, res) => {
 
   const providers = [
     {
+      name: "DuckDuckGo HTML",
+      url: "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query),
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml",
+        "Accept-Language": "en-US,en;q=0.9"
+      },
+      format: "html"
+    },
+    {
       name: "Bing RSS",
       url: "https://www.bing.com/search?format=rss&q=" + encodeURIComponent(query),
       headers: {
@@ -599,7 +609,7 @@ app.get("/search", async (req, res) => {
       format: "xml"
     },
     {
-      name: "DuckDuckGo",
+      name: "DuckDuckGo Lite",
       url: "https://lite.duckduckgo.com/lite/?q=" + encodeURIComponent(query),
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
@@ -630,6 +640,8 @@ app.get("/search", async (req, res) => {
   function extractResults($, providerName) {
     const results = [];
     const seen = new Set();
+
+    const cleanText = (value) => String(value || "").replace(/\\s+/g, " ").trim();
 
     const decodeDuckDuckGo = (href) => {
       try {
@@ -663,8 +675,8 @@ app.get("/search", async (req, res) => {
           hostname.endsWith(".bing.com")
         ) return;
 
-        const cleanTitle = String(title).replace(/\\s+/g, " ").trim();
-        const cleanSnippet = String(snippet || "").replace(/\\s+/g, " ").trim();
+        const cleanTitle = cleanText(title);
+        const cleanSnippet = cleanText(snippet);
         if (!cleanTitle || cleanTitle.length < 2) return;
 
         const key = parsed.href;
@@ -811,11 +823,12 @@ cards +
       let results;
       if (provider.format === "xml") {
         results = [];
-        $("item").each((_, item) => {
+        $("item, entry").each((_, item) => {
           const title = $(item).find("title").first().text();
-          const href = $(item).find("link").first().text().trim();
-          const snippet = $(item).find("description").first().text();
-          if (title && href) results.push({ title, href, snippet });
+          const description = $(item).find("description, summary, content").first().text();
+          let href = $(item).find("link").first().text().trim();
+          if (!href) href = $(item).find("link[href]").first().attr("href") || "";
+          if (title && href) results.push({ title, href, snippet: description });
         });
         results = results.slice(0, 20);
       } else {
