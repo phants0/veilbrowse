@@ -5,8 +5,19 @@ import { Readable } from "node:stream";
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
+const PUBLIC_DIR = new URL("./public/", import.meta.url);
 
 app.disable("x-powered-by");
+
+// Serve VeilBrowse's own frontend assets before the proxy/catch-all routes.
+// This is required for /styles.css and /app.js to be returned with their
+// actual file contents and MIME types in production hosts such as Wasmer.
+app.use(express.static(PUBLIC_DIR, {
+  index: false,
+  fallthrough: true,
+  etag: false,
+  maxAge: 0
+}));
 app.set("trust proxy", false);
 
 // Privacy defaults:
@@ -298,7 +309,7 @@ app.get("/proxy", async (req, res) => {
 
 app.use((_req, res) => {
   res.sendFile("index.html", {
-    root: new URL("./public", import.meta.url).pathname
+    root: PUBLIC_DIR.pathname
   });
 });
 
