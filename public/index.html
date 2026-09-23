@@ -16,28 +16,21 @@
 
       <form id="go" class="url-form omnibox">
         <label class="sr-only" for="url">Search or enter a website URL</label>
-        <input
-          id="url"
-          name="url"
-          type="text"
-          inputmode="url"
-          autocomplete="off"
-          autocapitalize="off"
-          spellcheck="false"
-          placeholder="Search or enter a website URL"
-          aria-label="Search or enter a website URL"
-          required
-        >
+        <input id="url" name="url" type="text" inputmode="url" autocomplete="off"
+          autocapitalize="off" spellcheck="false" placeholder="Search or enter a website URL"
+          aria-label="Search or enter a website URL" required>
         <button type="submit" aria-label="Go">Go</button>
       </form>
 
+      <div class="local-actions">
+        <button class="secondary-button" id="openFiles" type="button">Open Local Files</button>
+        <input id="localFiles" type="file" multiple hidden>
+        <span>Files stay on your device</span>
+      </div>
+
       <div class="privacy">
-        <span>●</span>
-        <span>No server-side history</span>
-        <span>•</span>
-        <span>No persistent cookies</span>
-        <span>•</span>
-        <span>No analytics</span>
+        <span>●</span><span>No server-side history</span><span>•</span>
+        <span>No persistent cookies</span><span>•</span><span>No analytics</span>
       </div>
     </section>
 
@@ -51,6 +44,61 @@
       </p>
     </section>
   </main>
+
+  <div class="file-workspace" id="fileWorkspace" hidden>
+    <div class="workspace-backdrop" data-close-files></div>
+    <section class="workspace-panel" aria-label="Local file workspace">
+      <header class="workspace-header">
+        <div>
+          <div class="workspace-title">Local Files</div>
+          <div class="workspace-subtitle" id="workspaceStatus">No files loaded</div>
+        </div>
+        <div class="workspace-header-actions">
+          <button class="secondary-button compact" id="addFiles" type="button">Add Files</button>
+          <button class="icon-button" id="closeFiles" type="button" aria-label="Close local files">×</button>
+        </div>
+      </header>
+
+      <div class="workspace-body">
+        <aside class="file-sidebar">
+          <div class="sidebar-heading">
+            <span>Workspace</span>
+            <button class="text-button" id="selectAllFiles" type="button">Select all</button>
+          </div>
+          <div class="file-list" id="fileList">
+            <div class="empty-files">Choose files to begin.</div>
+          </div>
+        </aside>
+
+        <section class="file-main">
+          <div class="file-toolbar">
+            <div class="file-toolbar-left">
+              <button class="primary-button" id="runSelected" type="button" disabled>▶ Run Selected</button>
+              <button class="secondary-button compact" id="runAll" type="button" disabled>▶ Run All</button>
+              <button class="secondary-button compact" id="clearConsole" type="button">Clear Console</button>
+            </div>
+            <div class="file-type" id="activeFileType">Workspace</div>
+          </div>
+
+          <div class="file-viewer" id="fileViewer">
+            <div class="viewer-empty">
+              <strong>Select a file</strong>
+              <span>Scripts can be run in the isolated console. Other files open in their appropriate viewer.</span>
+            </div>
+          </div>
+
+          <div class="console-panel">
+            <div class="console-header">
+              <span>Console</span>
+              <span class="console-state" id="consoleState">Idle</span>
+            </div>
+            <pre class="console-output" id="consoleOutput" aria-live="polite"></pre>
+          </div>
+        </section>
+      </div>
+    </section>
+    <iframe id="scriptSandbox" class="script-sandbox" sandbox="allow-scripts" title="Local script sandbox"></iframe>
+  </div>
 
   <script src="/app.js" defer></script>
 </body>
