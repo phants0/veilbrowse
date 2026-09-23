@@ -45,7 +45,6 @@ const BLOCKED_HEADERS = new Set([
 
 const PASS_RESPONSE_HEADERS = [
   "content-type",
-  "content-encoding",
   "content-language",
   "etag",
   "last-modified",
@@ -218,6 +217,12 @@ function copyResponseHeaders(upstream, response) {
     if (value) response.setHeader(header, value);
   }
 
+  // Node fetch transparently decodes gzip/br/deflate responses. Never forward
+  // the upstream Content-Encoding header after that decoding, or browsers can
+  // try to decode already-decoded bytes and report "cannot decode raw data".
+  response.removeHeader("Content-Encoding");
+  response.removeHeader("Content-Length");
+
   response.setHeader("Referrer-Policy", "no-referrer");
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("Cache-Control", "no-store, private, max-age=0");
@@ -279,16 +284,24 @@ app.get("/proxy", async (req, res) => {
 
     if (contentType.includes("text/html")) {
       const html = await upstream.text();
-      const rewritten = await rewriteHtml(html, upstream.url || target.href);
+      const rewritten = await rewriteHtml(html, currentTarget.href);
 
+      // The body was decoded and rewritten, so upstream validators/encoding
+      // metadata no longer describe the bytes we are sending.
+      res.removeHeader("Content-Encoding");
+      res.removeHeader("ETag");
+      res.removeHeader("Last-Modified");
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       return res.status(upstream.status).send(rewritten);
     }
 
     if (contentType.includes("text/css")) {
       const css = await upstream.text();
+      res.removeHeader("Content-Encoding");
+      res.removeHeader("ETag");
+      res.removeHeader("Last-Modified");
       res.setHeader("Content-Type", "text/css; charset=utf-8");
-      return res.status(upstream.status).send(rewriteCss(css, upstream.url || target.href));
+      return res.status(upstream.status).send(rewriteCss(css, currentTarget.href));
     }
 
     if (upstream.body) {
