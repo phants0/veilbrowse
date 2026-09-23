@@ -721,7 +721,7 @@ app.get("/search", async (req, res) => {
     const results = [];
     const seen = new Set();
 
-    const cleanText = (value) => String(value || "").replace(/\\s+/g, " ").trim();
+    const cleanText = (value) => String(value || "").replace(/\s+/g, " ").trim();
 
     const decodeDuckDuckGo = (href) => {
       try {
