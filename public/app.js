@@ -286,48 +286,48 @@ async function buildHtmlProject(file) {
   }
 
   const bridge =
-    "<script>\\n" +
-    "(function () {\\n" +
-    "  const __send = (type, args) => parent.postMessage({source: \\"veilbrowse-local-html\\", type, file: " + JSON.stringify(file.name) + ", args: args.map((value) => { try { return typeof value === \\"string\\" ? value : JSON.stringify(value); } catch { return String(value); } })}, \\"*\\");\\n" +
-    "  const __console = window.console;\\n" +
-    "  window.console = {\\n" +
-    "    log: (...args) => { __console.log(...args); __send(\\"log\\", args); },\\n" +
-    "    info: (...args) => { __console.info(...args); __send(\\"info\\", args); },\\n" +
-    "    warn: (...args) => { __console.warn(...args); __send(\\"warn\\", args); },\\n" +
-    "    error: (...args) => { __console.error(...args); __send(\\"error\\", args); }\\n" +
-    "  };\\n" +
-    "  window.addEventListener(\\"error\\", (event) => __send(\\"error\\", [event.error?.stack || event.message || \\"Script error\\"]));\\n" +
-    "  window.addEventListener(\\"unhandledrejection\\", (event) => __send(\\"error\\", [event.reason?.stack || event.reason?.message || String(event.reason)]));\\n" +
-    "})();\\n" +
+    "<script>\n" +
+    "(function () {\n" +
+    "  const __send = (type, args) => parent.postMessage({source: \\"veilbrowse-local-html\\", type, file: " + JSON.stringify(file.name) + ", args: args.map((value) => { try { return typeof value === \\"string\\" ? value : JSON.stringify(value); } catch { return String(value); } })}, \\"*\\");\n" +
+    "  const __console = window.console;\n" +
+    "  window.console = {\n" +
+    "    log: (...args) => { __console.log(...args); __send(\\"log\\", args); },\n" +
+    "    info: (...args) => { __console.info(...args); __send(\\"info\\", args); },\n" +
+    "    warn: (...args) => { __console.warn(...args); __send(\\"warn\\", args); },\n" +
+    "    error: (...args) => { __console.error(...args); __send(\\"error\\", args); }\n" +
+    "  };\n" +
+    "  window.addEventListener(\\"error\\", (event) => __send(\\"error\\", [event.error?.stack || event.message || \\"Script error\\"]));\n" +
+    "  window.addEventListener(\\"unhandledrejection\\", (event) => __send(\\"error\\", [event.reason?.stack || event.reason?.message || String(event.reason)]));\n" +
+    "})();\n" +
     "</script>";
 
   const styleBlocks = styles.map((entry) => {
     const safeSource = String(entry.source || "").replace(/<\/style/gi, "<\\/style");
-    return "<style data-veilbrowse-file=\\"" + escapeHtml(entry.name) + "\\">\\n" + safeSource + "\\n</style>";
-  }).join("\\n");
+    return "<style data-veilbrowse-file=\\"" + escapeHtml(entry.name) + "\\">\n" + safeSource + "\n</style>";
+  }).join("\n");
 
   const scriptBlocks = scripts.map((entry) => {
     const safeSource = String(entry.source || "").replace(/<\/script/gi, "<\\/script");
     const isModule = /\btype\s*=\s*["']module["']/i.test(entry.attrs || "");
-    return "<script" + (isModule ? " type=\\"module\\"" : "") + " data-veilbrowse-file=\\"" + escapeHtml(entry.name) + "\\">\\n" + safeSource + "\\n</script>";
-  }).join("\\n");
+    return "<script" + (isModule ? " type=\\"module\\"" : "") + " data-veilbrowse-file=\\"" + escapeHtml(entry.name) + "\\">\n" + safeSource + "\n</script>";
+  }).join("\n");
 
   if (/<head\b[^>]*>/i.test(html)) {
-    html = html.replace(/<head\b[^>]*>/i, (tag) => tag + "\\n" + bridge + "\\n" + styleBlocks);
+    html = html.replace(/<head\b[^>]*>/i, (tag) => tag + "\n" + bridge + "\n" + styleBlocks);
   } else {
-    html = bridge + "\\n" + styleBlocks + "\\n" + html;
+    html = bridge + "\n" + styleBlocks + "\n" + html;
   }
 
   if (/<\/body\s*>/i.test(html)) {
-    html = html.replace(/<\/body\s*>/i, scriptBlocks + "\\n</body>");
+    html = html.replace(/<\/body\s*>/i, scriptBlocks + "\n</body>");
   } else {
-    html += "\\n" + scriptBlocks;
+    html += "\n" + scriptBlocks;
   }
 
   const csp = '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; script-src \'unsafe-inline\'; img-src data: blob:; font-src data:; connect-src \'none\'; object-src \'none\'; base-uri \'none\'; form-action \'none\';">';
   html = /<head\b/i.test(html)
-    ? html.replace(/<head\b([^>]*)>/i, "<head$1>\\n" + csp)
-    : csp + "\\n" + html;
+    ? html.replace(/<head\b([^>]*)>/i, "<head$1>\n" + csp)
+    : csp + "\n" + html;
 
   if (linkedFiles.size) {
     logConsole("HTML linked " + linkedFiles.size + " local file" + (linkedFiles.size === 1 ? "" : "s") + ".", "system");
@@ -481,7 +481,10 @@ async function runScripts(selectedOnly) {
 }
 
 window.addEventListener("message", (event) => {
-  if (event.source !== scriptSandbox.contentWindow || event.data?.source !== "veilbrowse-local-script") return;
+  const isScriptRunner = event.source === scriptSandbox.contentWindow && event.data?.source === "veilbrowse-local-script";
+  const htmlFrame = fileViewer.querySelector("iframe.local-preview");
+  const isHtmlPreview = htmlFrame && event.source === htmlFrame.contentWindow && event.data?.source === "veilbrowse-local-html";
+  if (!isScriptRunner && !isHtmlPreview) return;
   const data = event.data;
   if (data.type === "done") {
     setRunning(false);
