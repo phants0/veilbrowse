@@ -721,7 +721,7 @@ app.get("/search", async (req, res) => {
     const results = [];
     const seen = new Set();
 
-    const cleanText = (value) => String(value || "").replace(/\s+/g, " ").trim();
+    const cleanText = (value) => String(value || "").replace(/\\s+/g, " ").trim();
 
     const decodeDuckDuckGo = (href) => {
       try {
@@ -796,21 +796,6 @@ app.get("/search", async (req, res) => {
           parent.find(".b_caption p, .b_snippet, p").first().text()
         );
         if (results.length >= 20) return false;
-      });
-    }
-
-    if (results.length === 0 && providerName === "Bing") {
-      // Bing markup changes frequently. Fall back to links whose text looks
-      // like a result title and whose URL is external, without depending on
-      // a particular result-card class.
-      $("a[href]").each((_, element) => {
-        const link = $(element);
-        const text = cleanText(link.text());
-        const href = link.attr("href") || "";
-        if (text.length >= 3 && href.startsWith("http")) {
-          add(text, href, "");
-          if (results.length >= 20) return false;
-        }
       });
     }
 
@@ -917,30 +902,15 @@ cards +
 
       let results;
       if (provider.format === "xml") {
-        // Bing RSS is simple RSS 2.0. Parse the item fields directly from the
-        // response text so an HTML parser can never reinterpret <link> as a
-        // void HTML element.
-        const decodeXml = (value) => String(value || "")
-          .replace(/&lt;/gi, "<")
-          .replace(/&gt;/gi, ">")
-          .replace(/&quot;/gi, '"')
-          .replace(/&#39;/gi, "'")
-          .replace(/&amp;/gi, "&");
-
-        const getXmlField = (item, tag) => {
-          const match = item.match(new RegExp("<" + tag + "\\b[^>]*>([\\s\\S]*?)</" + tag + ">", "i"));
-          return match ? decodeXml(match[1].trim()) : "";
-        };
-
         results = [];
-        for (const match of html.matchAll(/<item\\b[^>]*>([\\s\\S]*?)<\\/item>/gi)) {
-          const item = match[1];
-          const title = getXmlField(item, "title");
-          const description = getXmlField(item, "description");
-          const href = getXmlField(item, "link");
+        $("item, entry").each((_, item) => {
+          const title = $(item).find("title").first().text();
+          const description = $(item).find("description, summary, content").first().text();
+          let href = $(item).find("link").first().text().trim();
+          if (!href) href = $(item).find("link[href]").first().attr("href") || "";
           if (title && href) results.push({ title, href, snippet: description });
-          if (results.length >= 20) break;
-        }
+        });
+        results = results.slice(0, 20);
       } else {
         results = extractResults($, provider.name);
       }
