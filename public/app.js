@@ -288,28 +288,28 @@ async function buildHtmlProject(file) {
   const bridge =
     "<script>\n" +
     "(function () {\n" +
-    "  const __send = (type, args) => parent.postMessage({source: \\"veilbrowse-local-html\\", type, file: " + JSON.stringify(file.name) + ", args: args.map((value) => { try { return typeof value === \\"string\\" ? value : JSON.stringify(value); } catch { return String(value); } })}, \\"*\\");\n" +
+    "  const __send = (type, args) => parent.postMessage({source: \"veilbrowse-local-html\", type, file: " + JSON.stringify(file.name) + ", args: args.map((value) => { try { return typeof value === \"string\" ? value : JSON.stringify(value); } catch { return String(value); } })}, \"*\");\n" +
     "  const __console = window.console;\n" +
     "  window.console = {\n" +
-    "    log: (...args) => { __console.log(...args); __send(\\"log\\", args); },\n" +
-    "    info: (...args) => { __console.info(...args); __send(\\"info\\", args); },\n" +
-    "    warn: (...args) => { __console.warn(...args); __send(\\"warn\\", args); },\n" +
-    "    error: (...args) => { __console.error(...args); __send(\\"error\\", args); }\n" +
+    "    log: (...args) => { __console.log(...args); __send(\"log\", args); },\n" +
+    "    info: (...args) => { __console.info(...args); __send(\"info\", args); },\n" +
+    "    warn: (...args) => { __console.warn(...args); __send(\"warn\", args); },\n" +
+    "    error: (...args) => { __console.error(...args); __send(\"error\", args); }\n" +
     "  };\n" +
-    "  window.addEventListener(\\"error\\", (event) => __send(\\"error\\", [event.error?.stack || event.message || \\"Script error\\"]));\n" +
-    "  window.addEventListener(\\"unhandledrejection\\", (event) => __send(\\"error\\", [event.reason?.stack || event.reason?.message || String(event.reason)]));\n" +
+    "  window.addEventListener(\"error\", (event) => __send(\"error\", [event.error?.stack || event.message || \"Script error\"]));\n" +
+    "  window.addEventListener(\"unhandledrejection\", (event) => __send(\"error\", [event.reason?.stack || event.reason?.message || String(event.reason)]));\n" +
     "})();\n" +
     "</script>";
 
   const styleBlocks = styles.map((entry) => {
     const safeSource = String(entry.source || "").replace(/<\/style/gi, "<\\/style");
-    return "<style data-veilbrowse-file=\\"" + escapeHtml(entry.name) + "\\">\n" + safeSource + "\n</style>";
+    return "<style data-veilbrowse-file=\"" + escapeHtml(entry.name) + "\">\n" + safeSource + "\n</style>";
   }).join("\n");
 
   const scriptBlocks = scripts.map((entry) => {
     const safeSource = String(entry.source || "").replace(/<\/script/gi, "<\\/script");
     const isModule = /\btype\s*=\s*["']module["']/i.test(entry.attrs || "");
-    return "<script" + (isModule ? " type=\\"module\\"" : "") + " data-veilbrowse-file=\\"" + escapeHtml(entry.name) + "\\">\n" + safeSource + "\n</script>";
+    return "<script" + (isModule ? " type=\"module\"" : "") + " data-veilbrowse-file=\"" + escapeHtml(entry.name) + "\">\n" + safeSource + "\n</script>";
   }).join("\n");
 
   if (/<head\b[^>]*>/i.test(html)) {
