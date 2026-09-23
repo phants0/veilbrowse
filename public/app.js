@@ -84,21 +84,37 @@ form?.addEventListener("submit", (event) => {
   window.location.assign("/proxy?url=" + encodeURIComponent(url.href));
 });
 
+const FILE_TYPES = {
+  js: "script",
+  mjs: "script",
+  html: "html",
+  htm: "html",
+  css: "css",
+  json: "json",
+  xml: "text",
+  txt: "text",
+  md: "text",
+  ts: "text",
+  pdf: "pdf",
+  png: "image",
+  jpg: "image",
+  jpeg: "image",
+  gif: "image",
+  webp: "image",
+  svg: "image",
+  bmp: "image"
+};
+
 function extension(name) {
-  const match = name.toLowerCase().match(/\.([a-z0-9]+)$/);
-  return match ? match[1] : "";
+  const filename = String(name || "").trim();
+  const lastDot = filename.lastIndexOf(".");
+  if (lastDot <= 0 || lastDot === filename.length - 1) return "";
+  return filename.slice(lastDot + 1).toLowerCase();
 }
 
 function kindOf(file) {
-  const ext = extension(file.name);
-  if (["js", "mjs"].includes(ext)) return "script";
-  if (ext === "html" || ext === "htm") return "html";
-  if (ext === "css") return "css";
-  if (ext === "json") return "json";
-  if (["xml", "txt", "md", "ts"].includes(ext)) return "text";
-  if (["pdf"].includes(ext)) return "pdf";
-  if (["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"].includes(ext)) return "image";
-  return "unknown";
+  const ext = extension(file?.name);
+  return FILE_TYPES[ext] || "unknown";
 }
 
 function isRunnable(file) {
