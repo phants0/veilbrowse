@@ -874,7 +874,7 @@ app.get("/search", async (req, res) => {
 '.search-shell{display:flex;flex:1;min-width:0;align-items:flex-start;justify-content:flex-end;gap:8px}' +
 '.search-shell form{display:flex;gap:8px;width:min(760px,100%);max-height:56px;overflow:hidden;opacity:1;transform:translateY(0);transition:max-height .24s ease,opacity .2s ease,transform .24s ease;margin:0;padding:0}' +
 '.search-shell.collapsed form{max-height:0;opacity:0;transform:translateY(-10px);pointer-events:none;margin:0;padding:0}' +
-'.search-toggle{height:40px;border:1px solid #30343d;border-radius:10px;padding:0 14px;background:#111318;color:#aeb5c1;font:600 14px inherit;cursor:pointer;transition:background .16s ease,color .16s ease}' +
+'.search-toggle{height:40px;border:1px solid #30343d;border-radius:10px;padding:0 14px;background:#111318;color:#aeb5c1;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;transition:background .16s ease,color .16s ease}' +
 '.search-toggle:hover{background:#181b21;color:#fff}' +
 '.search-toggle:focus-visible{outline:2px solid #8ab4ff;outline-offset:2px}' +
 'input{width:100%;height:40px;border:1px solid #30343d;border-radius:10px;background:#111318;color:#fff;padding:0 14px;font:inherit;outline:none}' +
