@@ -868,13 +868,17 @@ app.get("/search", async (req, res) => {
 '<style>' +
 ':root{color-scheme:dark}*{box-sizing:border-box}' +
 'body{margin:0;background:#08090c;color:#f4f4f5;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}' +
-'.top{position:sticky;top:0;z-index:10;background:rgba(8,9,12,.94);backdrop-filter:blur(14px);border-bottom:1px solid #20232a;padding:14px 20px}' +
-'.nav{max-width:980px;margin:0 auto;display:flex;gap:12px;align-items:center}' +
+'.top{position:sticky;top:0;z-index:10;background:rgba(8,9,12,.94);backdrop-filter:blur(14px);border-bottom:1px solid #20232a;padding:10px 20px}' +
+'.nav{max-width:980px;margin:0 auto;display:flex;gap:10px;align-items:center}' +
 '.brand{color:#fff;text-decoration:none;font-weight:800;letter-spacing:.08em;font-size:14px;white-space:nowrap}' +
-'form{display:flex;flex:1;gap:8px}' +
-'input{width:100%;height:42px;border:1px solid #30343d;border-radius:10px;background:#111318;color:#fff;padding:0 14px;font:inherit;outline:none}' +
+'.search-shell{position:relative;display:flex;flex:1;min-width:0;align-items:center}' +
+'.search-shell form{display:flex;flex:1;gap:8px;min-width:0;transition:opacity .16s ease,transform .16s ease}' +
+'.search-shell.collapsed form{display:none}' +
+'input{width:100%;height:40px;border:1px solid #30343d;border-radius:10px;background:#111318;color:#fff;padding:0 14px;font:inherit;outline:none}' +
 'input:focus{border-color:#687386;box-shadow:0 0 0 3px rgba(120,130,150,.14)}' +
-'button{height:42px;border:0;border-radius:10px;padding:0 18px;background:#f4f4f5;color:#090a0c;font:600 14px inherit;cursor:pointer}' +
+'button{height:40px;border:0;border-radius:10px;padding:0 16px;background:#f4f4f5;color:#090a0c;font:600 14px inherit;cursor:pointer}' +
+'.toggle{width:40px;min-width:40px;padding:0;background:#111318;color:#aeb5c1;border:1px solid #30343d;font-size:15px}' +
+'.toggle:hover{background:#181b21;color:#fff}' +
 'main{max-width:980px;margin:0 auto;padding:30px 20px 60px}' +
 '.meta{color:#8d94a1;font-size:13px;margin-bottom:20px}' +
 '.provider{color:#6f7785}' +
@@ -894,11 +898,11 @@ app.get("/search", async (req, res) => {
 '<input name="q" value="' + escapeHtml(query) + '" aria-label="Search" autocomplete="off" spellcheck="false">' +
 '<button type="submit">Search</button>' +
 '</form>' +
-'<button class="collapse" id="collapseSearch" type="button" aria-label="Expand search bar" aria-expanded="false">⌄</button>' +
+'<button class="toggle" id="collapseSearch" type="button" aria-label="Expand search bar" aria-expanded="false">⌕</button>' +
 '</div></div></header>' +
 '<main><div class="meta">Search results for <strong>' + escapeHtml(query) + '</strong> <span class="provider">• Powered by ' + escapeHtml(providerName) + '</span></div>' +
 cards +
-'</main><script>(function(){const shell=document.getElementById("searchShell");const button=document.getElementById("collapseSearch");const form=shell?.querySelector("form");if(!shell||!button)return;button.addEventListener("click",function(){const collapsed=shell.classList.toggle("collapsed");button.setAttribute("aria-expanded",String(!collapsed));button.setAttribute("aria-label",collapsed?"Expand search bar":"Collapse search bar");button.textContent=collapsed?"⌄":"⌃";if(!collapsed)form?.querySelector("input")?.focus();});})();</script></body></html>';
+'</main><script>(function(){const shell=document.getElementById("searchShell");const button=document.getElementById("collapseSearch");const form=shell?.querySelector("form");if(!shell||!button)return;button.addEventListener("click",function(){const collapsed=shell.classList.toggle("collapsed");button.setAttribute("aria-expanded",String(!collapsed));button.setAttribute("aria-label",collapsed?"Expand search bar":"Collapse search bar");button.textContent=collapsed?"⌕":"×";if(!collapsed)form?.querySelector("input")?.focus();});})();</script></body></html>';
   }
 
   let lastError = null;
