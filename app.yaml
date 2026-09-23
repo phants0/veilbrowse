@@ -1,0 +1,5 @@
+kind: wasmer.io/App.v0
+name: veilbrowse
+owner: phants0
+package: .
+debug: true
