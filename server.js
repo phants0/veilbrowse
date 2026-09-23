@@ -585,100 +585,123 @@ app.get("/health", (_req, res) => {
 app.get("/search", async (req, res) => {
   const query = typeof req.query.q === "string" ? req.query.q.trim() : "";
 
-  if (!query) {
-    return res.redirect("/");
-  }
+  if (!query) return res.redirect("/");
+  if (query.length > 300) return res.status(400).send("Search query is too long.");
 
-  if (query.length > 300) {
-    return res.status(400).send("Search query is too long.");
-  }
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
-
-  try {
-    const searchUrl = new URL("https://html.duckduckgo.com/html/");
-    searchUrl.searchParams.set("q", query);
-
-    const upstream = await fetch(searchUrl, {
-      signal: controller.signal,
+  const providers = [
+    {
+      name: "DuckDuckGo",
+      url: "https://lite.duckduckgo.com/lite/?q=" + encodeURIComponent(query),
       headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml",
+        "Accept-Language": "en-US,en;q=0.9"
       }
-    });
-
-    if (!upstream.ok) {
-      return res.status(502).send("DuckDuckGo search is temporarily unavailable.");
+    },
+    {
+      name: "DuckDuckGo HTML",
+      url: "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query),
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml",
+        "Accept-Language": "en-US,en;q=0.9"
+      }
+    },
+    {
+      name: "Bing",
+      url: "https://www.bing.com/search?q=" + encodeURIComponent(query),
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml",
+        "Accept-Language": "en-US,en;q=0.9"
+      }
     }
+  ];
 
-    const html = await upstream.text();
-    const { load } = await import("cheerio");
-    const $ = load(html, { decodeEntities: false });
+  let lastError = null;
 
-    $("a.result__a, a.result__url, a.result__snippet, a.result__more-attribution").each((_, element) => {
-      const href = $(element).attr("href");
-      if (!href) return;
+  for (const provider of providers) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
 
-      let destination = href;
+    try {
+      const upstream = await fetch(provider.url, {
+        signal: controller.signal,
+        headers: provider.headers,
+        redirect: "follow"
+      });
 
-      try {
-        const parsed = new URL(href, searchUrl.href);
-        const encoded = parsed.searchParams.get("uddg");
-        if (encoded) destination = encoded;
-      } catch {}
-
-      if (/^https?:/i.test(destination)) {
-        $(element).attr("href", proxyUrl(destination, searchUrl.href));
+      if (!upstream.ok) {
+        lastError = new Error(provider.name + " returned HTTP " + upstream.status);
+        continue;
       }
-    });
 
-    $("a").each((_, element) => {
-      const href = $(element).attr("href");
-      if (!href) return;
+      const html = await upstream.text();
+      if (!html || html.length < 200) {
+        lastError = new Error(provider.name + " returned an empty response");
+        continue;
+      }
 
-      try {
-        const parsed = new URL(href, searchUrl.href);
-        if (parsed.hostname === "html.duckduckgo.com") {
-          $(element).attr("href", "/search" + parsed.search);
+      const { load } = await import("cheerio");
+      const $ = load(html, { decodeEntities: false });
+
+      $("a").each((_, element) => {
+        const href = $(element).attr("href");
+        if (!href || href.startsWith("#") || href.startsWith("javascript:")) return;
+
+        try {
+          const parsed = new URL(href, provider.url);
+
+          if (parsed.searchParams.has("uddg")) {
+            const destination = parsed.searchParams.get("uddg");
+            if (destination && /^https?:/i.test(destination)) {
+              $(element).attr("href", proxyUrl(destination, provider.url));
+              return;
+            }
+          }
+
+          if (/^https?:/i.test(parsed.href) && !parsed.hostname.endsWith("duckduckgo.com") && !parsed.hostname.endsWith("bing.com")) {
+            $(element).attr("href", proxyUrl(parsed.href, provider.url));
+          }
+        } catch {}
+      });
+
+      $("form").each((_, element) => {
+        $(element).attr("action", "/search");
+        $(element).attr("method", "get");
+        const q = $(element).find('input[name="q"]');
+        if (q.length) {
+          q.attr("name", "q");
+        } else {
+          $(element).prepend('<input type="hidden" name="q" value="">');
         }
-      } catch {}
-    });
+      });
 
-    $("form").each((_, element) => {
-      const action = $(element).attr("action") || "/html/";
-      $(element).attr("action", "/search");
+      $("head").prepend(
+        '<meta name="referrer" content="no-referrer">' +
+        '<meta name="robots" content="noindex,nofollow">' +
+        '<style>' +
+        'body{margin:0!important;background:#08090c!important;color:#f4f4f5!important;font-family:Inter,system-ui,sans-serif!important}' +
+        'a{color:#8ab4ff}' +
+        '</style>'
+      );
 
-      if (!$(element).find('input[name="q"]').length) {
-        $(element).prepend('<input type="hidden" name="q" value="">');
-      }
-
-      if (action) $(element).attr("method", "get");
-    });
-
-    $("head").prepend(
-      '<meta name="referrer" content="no-referrer">' +
-      '<meta name="robots" content="noindex,nofollow">' +
-      '<style>' +
-      'body{margin:0!important;background:#08090c!important;color:#f4f4f5!important;font-family:Inter,system-ui,sans-serif!important}' +
-      'a{color:#8ab4ff}.header,.site-wrapper,.header__form,.search__form,.search__result,.result__title,.result__snippet,.result__url{max-width:900px}' +
-      '</style>'
-    );
-
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
-    res.setHeader("Cache-Control", "no-store, private, max-age=0");
-    res.setHeader("Referrer-Policy", "no-referrer");
-    return res.send($.html());
-  } catch (error) {
-    if (error.name === "AbortError") {
-      return res.status(504).send("DuckDuckGo search timed out.");
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.setHeader("Cache-Control", "no-store, private, max-age=0");
+      res.setHeader("Referrer-Policy", "no-referrer");
+      return res.send($.html());
+    } catch (error) {
+      lastError = error;
+    } finally {
+      clearTimeout(timeout);
     }
-
-    return res.status(502).send("Unable to perform the search.");
-  } finally {
-    clearTimeout(timeout);
   }
+
+  const reason = lastError?.name === "AbortError"
+    ? "Search provider timed out."
+    : "All search providers were unreachable from the proxy server.";
+
+  return res.status(502).send(reason);
 });
 
 app.all("/proxy", async (req, res) => {
