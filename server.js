@@ -871,14 +871,15 @@ app.get("/search", async (req, res) => {
 '.top{position:sticky;top:0;z-index:10;background:rgba(8,9,12,.94);backdrop-filter:blur(14px);border-bottom:1px solid #20232a;padding:10px 20px}' +
 '.nav{max-width:980px;margin:0 auto;display:flex;gap:10px;align-items:center}' +
 '.brand{color:#fff;text-decoration:none;font-weight:800;letter-spacing:.08em;font-size:14px;white-space:nowrap}' +
-'.search-shell{position:relative;display:flex;flex:1;min-width:0;align-items:center}' +
-'.search-shell form{display:flex;flex:1;gap:8px;min-width:0;transition:opacity .16s ease,transform .16s ease}' +
-'.search-shell.collapsed form{display:none}' +
+'.search-shell{position:relative;display:flex;flex:1;min-width:0;justify-content:flex-end}' +
+'.search-shell form{display:flex;gap:8px;width:min(760px,100%);max-height:56px;overflow:hidden;opacity:1;transform:translateY(0);transition:max-height .24s ease,opacity .2s ease,transform .24s ease;margin:0}' +
+'.search-shell.collapsed form{max-height:0;opacity:0;transform:translateY(-10px);pointer-events:none;margin:0}' +
+'.toggle{position:absolute;right:0;top:0;z-index:2;display:flex;align-items:center;justify-content:center;width:40px;min-width:40px;height:40px;padding:0;background:#111318;color:#aeb5c1;border:1px solid #30343d;font-size:18px;line-height:1;cursor:pointer;transition:transform .24s ease,background .16s ease,color .16s ease}' +
+'.search-shell:not(.collapsed) .toggle{transform:rotate(180deg)}' +
+'.toggle:hover{background:#181b21;color:#fff}' +
 'input{width:100%;height:40px;border:1px solid #30343d;border-radius:10px;background:#111318;color:#fff;padding:0 14px;font:inherit;outline:none}' +
 'input:focus{border-color:#687386;box-shadow:0 0 0 3px rgba(120,130,150,.14)}' +
 'button{height:40px;border:0;border-radius:10px;padding:0 16px;background:#f4f4f5;color:#090a0c;font:600 14px inherit;cursor:pointer}' +
-'.toggle{width:40px;min-width:40px;padding:0;background:#111318;color:#aeb5c1;border:1px solid #30343d;font-size:15px}' +
-'.toggle:hover{background:#181b21;color:#fff}' +
 'main{max-width:980px;margin:0 auto;padding:30px 20px 60px}' +
 '.meta{color:#8d94a1;font-size:13px;margin-bottom:20px}' +
 '.provider{color:#6f7785}' +
@@ -898,11 +899,11 @@ app.get("/search", async (req, res) => {
 '<input name="q" value="' + escapeHtml(query) + '" aria-label="Search" autocomplete="off" spellcheck="false">' +
 '<button type="submit">Search</button>' +
 '</form>' +
-'<button class="toggle" id="collapseSearch" type="button" aria-label="Expand search bar" aria-expanded="false">⌕</button>' +
+'<button class="toggle" id="collapseSearch" type="button" aria-label="Expand search bar" aria-expanded="false">⌄</button>' +
 '</div></div></header>' +
 '<main><div class="meta">Search results for <strong>' + escapeHtml(query) + '</strong> <span class="provider">• Powered by ' + escapeHtml(providerName) + '</span></div>' +
 cards +
-'</main><script>(function(){const shell=document.getElementById("searchShell");const button=document.getElementById("collapseSearch");const form=shell?.querySelector("form");if(!shell||!button)return;button.addEventListener("click",function(){const collapsed=shell.classList.toggle("collapsed");button.setAttribute("aria-expanded",String(!collapsed));button.setAttribute("aria-label",collapsed?"Expand search bar":"Collapse search bar");button.textContent=collapsed?"⌕":"×";if(!collapsed)form?.querySelector("input")?.focus();});})();</script></body></html>';
+'</main><script>(function(){const shell=document.getElementById("searchShell");const button=document.getElementById("collapseSearch");const form=shell?.querySelector("form");if(!shell||!button)return;button.addEventListener("click",function(){const collapsed=shell.classList.toggle("collapsed");button.setAttribute("aria-expanded",String(!collapsed));button.setAttribute("aria-label",collapsed?"Expand search bar":"Collapse search bar");button.textContent="⌄";if(!collapsed)form?.querySelector("input")?.focus();});})();</script></body></html>';
   }
 
   let lastError = null;
