@@ -1,14 +1,27 @@
 const form = document.querySelector("#go");
 const input = document.querySelector("#url");
-const searchForm = document.querySelector("#search");
-const searchInput = document.querySelector("#search-input");
+
+function looksLikeUrl(value) {
+  const trimmed = value.trim();
+
+  if (/^https?:\/\//i.test(trimmed)) return true;
+  if (/^localhost(?::\d+)?(?:\/|$)/i.test(trimmed)) return true;
+  if (/^\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?(?:\/|$)/.test(trimmed)) return true;
+
+  try {
+    const candidate = new URL("https://" + trimmed);
+    return candidate.hostname.includes(".") && !candidate.hostname.endsWith(".");
+  } catch {
+    return false;
+  }
+}
 
 function normalizeUrl(value) {
   const trimmed = value.trim();
   if (!trimmed) return null;
 
   try {
-    return new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`);
+    return new URL(trimmed.includes("://") ? trimmed : \`https://\${trimmed}\`);
   } catch {
     return null;
   }
@@ -17,25 +30,24 @@ function normalizeUrl(value) {
 form.addEventListener("submit", (event) => {
   event.preventDefault();
 
-  const url = normalizeUrl(input.value);
+  const value = input.value.trim();
+  if (!value) {
+    input.focus();
+    return;
+  }
+
+  if (!looksLikeUrl(value)) {
+    window.location.href = \`/search?q=\${encodeURIComponent(value)}\`;
+    return;
+  }
+
+  const url = normalizeUrl(value);
   if (!url || !["http:", "https:"].includes(url.protocol)) {
-    input.setCustomValidity("Enter a valid HTTP or HTTPS website.");
+    input.setCustomValidity("Enter a valid website URL or search term.");
     input.reportValidity();
     return;
   }
 
   input.setCustomValidity("");
-  window.location.href = `/proxy?url=${encodeURIComponent(url.href)}`;
-});
-
-searchForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-
-  const query = searchInput.value.trim();
-  if (!query) {
-    searchInput.focus();
-    return;
-  }
-
-  window.location.href = `/search?q=${encodeURIComponent(query)}`;
+  window.location.href = \`/proxy?url=\${encodeURIComponent(url.href)}\`;
 });
