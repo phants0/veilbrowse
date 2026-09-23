@@ -206,6 +206,136 @@ function updateRunButtons() {
   runAllButton.disabled = running || !scripts.some((file) => kindOf(file) === "script");
 }
 
+
+function normalizeLocalPath(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\\/g, "/")
+    .replace(/^\.\/+/, "")
+    .split("/")
+    .filter((part) => part && part !== ".")
+    .reduce((parts, part) => {
+      if (part === "..") parts.pop();
+      else parts.push(part);
+      return parts;
+    }, [])
+    .join("/");
+}
+
+function findWorkspaceFile(reference, currentName = "") {
+  const raw = String(reference || "").trim();
+  if (!raw || /^(?:https?:|data:|blob:|javascript:|mailto:|#)/i.test(raw)) return null;
+
+  const withoutQuery = raw.split(/[?#]/, 1)[0];
+  const currentPath = normalizeLocalPath(currentName);
+  const currentDir = currentPath.includes("/")
+    ? currentPath.slice(0, currentPath.lastIndexOf("/"))
+    : "";
+
+  const candidates = [
+    normalizeLocalPath(withoutQuery),
+    normalizeLocalPath(currentDir ? currentDir + "/" + withoutQuery : withoutQuery)
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    if (files.has(candidate)) return files.get(candidate);
+  }
+
+  const basename = candidates[candidates.length - 1]?.split("/").pop();
+  if (basename && files.has(basename)) return files.get(basename);
+
+  return [...files.values()].find((workspaceFile) => {
+    const normalized = normalizeLocalPath(workspaceFile.name);
+    return candidates.includes(normalized) || (basename && normalized.endsWith("/" + basename));
+  }) || null;
+}
+
+async function buildHtmlProject(file) {
+  let html = await file.text();
+  const scripts = [];
+  const styles = [];
+  const linkedFiles = new Set();
+
+  const scriptPattern = /<script\b([^>]*?)\bsrc\s*=\s*["']([^"']+)["']([^>]*)>\s*<\/script\s*>/gi;
+  html = html.replace(scriptPattern, (full, before, src, after) => {
+    const dependency = findWorkspaceFile(src, file.name);
+    if (!dependency || kindOf(dependency) !== "script") return full;
+
+    linkedFiles.add(dependency.name);
+    scripts.push({ name: dependency.name, source: null, attrs: before + after });
+    return "<!-- VeilBrowse local script: " + escapeHtml(dependency.name) + " -->";
+  });
+
+  const stylesheetPattern = /<link\b([^>]*?)\bhref\s*=\s*["']([^"']+)["']([^>]*)>/gi;
+  html = html.replace(stylesheetPattern, (full, before, href, after) => {
+    const dependency = findWorkspaceFile(href, file.name);
+    if (!dependency || kindOf(dependency) !== "css") return full;
+
+    linkedFiles.add(dependency.name);
+    styles.push({ name: dependency.name, source: null });
+    return "<!-- VeilBrowse local stylesheet: " + escapeHtml(dependency.name) + " -->";
+  });
+
+  for (const entry of scripts) {
+    const dependency = files.get(entry.name);
+    if (dependency) entry.source = await dependency.text();
+  }
+  for (const entry of styles) {
+    const dependency = files.get(entry.name);
+    if (dependency) entry.source = await dependency.text();
+  }
+
+  const bridge =
+    "<script>\\n" +
+    "(function () {\\n" +
+    "  const __send = (type, args) => parent.postMessage({source: \\"veilbrowse-local-html\\", type, file: " + JSON.stringify(file.name) + ", args: args.map((value) => { try { return typeof value === \\"string\\" ? value : JSON.stringify(value); } catch { return String(value); } })}, \\"*\\");\\n" +
+    "  const __console = window.console;\\n" +
+    "  window.console = {\\n" +
+    "    log: (...args) => { __console.log(...args); __send(\\"log\\", args); },\\n" +
+    "    info: (...args) => { __console.info(...args); __send(\\"info\\", args); },\\n" +
+    "    warn: (...args) => { __console.warn(...args); __send(\\"warn\\", args); },\\n" +
+    "    error: (...args) => { __console.error(...args); __send(\\"error\\", args); }\\n" +
+    "  };\\n" +
+    "  window.addEventListener(\\"error\\", (event) => __send(\\"error\\", [event.error?.stack || event.message || \\"Script error\\"]));\\n" +
+    "  window.addEventListener(\\"unhandledrejection\\", (event) => __send(\\"error\\", [event.reason?.stack || event.reason?.message || String(event.reason)]));\\n" +
+    "})();\\n" +
+    "</script>";
+
+  const styleBlocks = styles.map((entry) => {
+    const safeSource = String(entry.source || "").replace(/<\/style/gi, "<\\/style");
+    return "<style data-veilbrowse-file=\\"" + escapeHtml(entry.name) + "\\">\\n" + safeSource + "\\n</style>";
+  }).join("\\n");
+
+  const scriptBlocks = scripts.map((entry) => {
+    const safeSource = String(entry.source || "").replace(/<\/script/gi, "<\\/script");
+    const isModule = /\btype\s*=\s*["']module["']/i.test(entry.attrs || "");
+    return "<script" + (isModule ? " type=\\"module\\"" : "") + " data-veilbrowse-file=\\"" + escapeHtml(entry.name) + "\\">\\n" + safeSource + "\\n</script>";
+  }).join("\\n");
+
+  if (/<head\b[^>]*>/i.test(html)) {
+    html = html.replace(/<head\b[^>]*>/i, (tag) => tag + "\\n" + bridge + "\\n" + styleBlocks);
+  } else {
+    html = bridge + "\\n" + styleBlocks + "\\n" + html;
+  }
+
+  if (/<\/body\s*>/i.test(html)) {
+    html = html.replace(/<\/body\s*>/i, scriptBlocks + "\\n</body>");
+  } else {
+    html += "\\n" + scriptBlocks;
+  }
+
+  const csp = '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; script-src \'unsafe-inline\'; img-src data: blob:; font-src data:; connect-src \'none\'; object-src \'none\'; base-uri \'none\'; form-action \'none\';">';
+  html = /<head\b/i.test(html)
+    ? html.replace(/<head\b([^>]*)>/i, "<head$1>\\n" + csp)
+    : csp + "\\n" + html;
+
+  if (linkedFiles.size) {
+    logConsole("HTML linked " + linkedFiles.size + " local file" + (linkedFiles.size === 1 ? "" : "s") + ".", "system");
+  }
+
+  return html;
+}
+
 async function openFile(name) {
   const file = files.get(name);
   if (!file) return;
@@ -243,7 +373,8 @@ async function openFile(name) {
     const frame = document.createElement("iframe");
     frame.className = "local-preview";
     frame.sandbox.add("allow-scripts");
-    frame.srcdoc = text;
+    frame.title = file.name;
+    frame.srcdoc = await buildHtmlProject(file);
     fileViewer.innerHTML = "";
     fileViewer.appendChild(frame);
     return;
@@ -263,7 +394,6 @@ async function openFile(name) {
   fileViewer.innerHTML = "";
   fileViewer.appendChild(pre);
 }
-
 function addFiles(fileArray) {
   for (const file of fileArray) {
     files.set(file.name, Object.assign(file, {
