@@ -1051,11 +1051,16 @@ cards +
     const timeout = setTimeout(() => controller.abort(), 10000);
 
     try {
-      const upstream = await fetch(provider.url, {
+      const requestOptions = {
+        method: provider.method || "GET",
         signal: controller.signal,
         headers: provider.headers,
         redirect: "follow"
-      });
+      };
+
+      if (provider.body) requestOptions.body = provider.body;
+
+      const upstream = await fetch(provider.url, requestOptions);
 
       if (!upstream.ok) {
         lastError = new Error(provider.name + " returned HTTP " + upstream.status);
@@ -1068,8 +1073,6 @@ cards +
         continue;
       }
 
-      // DDG can return an interstitial/challenge page instead of results.
-      // Do not mistake its navigation links for actual search results.
       const lowerHtml = html.toLowerCase();
       const looksLikeDuckDuckGoChallenge =
         provider.name.startsWith("DuckDuckGo") &&
@@ -1078,7 +1081,8 @@ cards +
           lowerHtml.includes("unusual traffic") ||
           lowerHtml.includes("captcha") ||
           lowerHtml.includes("challenge-form") ||
-          lowerHtml.includes("challenge-spinner")
+          lowerHtml.includes("challenge-spinner") ||
+          lowerHtml.includes("automated requests")
         );
 
       if (looksLikeDuckDuckGoChallenge) {
@@ -1087,24 +1091,8 @@ cards +
       }
 
       const { load } = await import("cheerio");
-      const $ = provider.format === "xml"
-        ? load(html, { xml: true })
-        : load(html, { decodeEntities: false });
-
-      let results;
-      if (provider.format === "xml") {
-        results = [];
-        $("item, entry").each((_, item) => {
-          const title = $(item).find("title").first().text();
-          const description = $(item).find("description, summary, content").first().text();
-          let href = $(item).find("link").first().text().trim();
-          if (!href) href = $(item).find("link[href]").first().attr("href") || "";
-          if (title && href) results.push({ title, href, snippet: description });
-        });
-        results = results.slice(0, 20);
-      } else {
-        results = extractResults($, provider.name);
-      }
+      const $ = load(html, { decodeEntities: false });
+      const results = extractResults($, provider.name);
 
       if (results.length === 0) {
         lastError = new Error(provider.name + " returned no parseable results");
