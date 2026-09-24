@@ -814,7 +814,8 @@ app.get("/search", async (req, res) => {
   const providers = [
     {
       name: "DuckDuckGo HTML",
-      url: "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query),
+      method: "GET",
+      url: "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query) + "&kl=us-en&kp=-2",
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml",
@@ -824,22 +825,40 @@ app.get("/search", async (req, res) => {
       format: "html"
     },
     {
-      name: "DuckDuckGo Lite",
-      url: "https://lite.duckduckgo.com/lite/?q=" + encodeURIComponent(query) + "&kp=-2&kl=us-en",
+      name: "DuckDuckGo HTML POST",
+      method: "POST",
+      url: "https://html.duckduckgo.com/html/",
+      body: "q=" + encodeURIComponent(query) + "&kl=us-en&kp=-2",
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml",
-        "Accept-Language": "en-US,en;q=0.9"
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://html.duckduckgo.com/html/",
+        "Content-Type": "application/x-www-form-urlencoded"
       },
       format: "html"
     },
     {
-      name: "Google",
-      url: "https://www.google.com/search?q=" + encodeURIComponent(query) + "&hl=en&safe=active&num=20",
+      name: "DuckDuckGo Lite",
+      method: "GET",
+      url: "https://lite.duckduckgo.com/lite/?q=" + encodeURIComponent(query) + "&kp=-2&kl=us-en",
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml",
-        "Accept-Language": "en-US,en;q=0.9"
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://duckduckgo.com/"
+      },
+      format: "html"
+    },
+    {
+      name: "Bing",
+      method: "GET",
+      url: "https://www.bing.com/search?q=" + encodeURIComponent(query) + "&count=20&setlang=en-US",
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://www.bing.com/"
       },
       format: "html"
     }
