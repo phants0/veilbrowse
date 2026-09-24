@@ -1022,6 +1022,18 @@ app.get("/search", async (req, res) => {
       }
     }
 
+    if (providerName === "Bing" && results.length === 0) {
+      // Bing can return result markup that Cheerio normalizes differently from
+      // the browser DOM. Recover ordinary h2/h3 result links directly from
+      // the response text as a final parser fallback.
+      const headingLinkPattern = /<h[23][^>]*>\\s*<a[^>]+href=["']([^"']+)["'][^>]*>([\\s\\S]*?)<\\/a>\\s*<\\/h[23]>/gi;
+      let match;
+      while ((match = headingLinkPattern.exec(body)) && results.length < 20) {
+        const title = cleanText(match[2].replace(/<[^>]+>/g, " "));
+        add(title, match[1]);
+      }
+    }
+
     // Markup changes frequently. As a provider-independent fallback, inspect
     // every external link and use its nearest heading/text as the result.
     // This keeps search functional when DDG/Bing change their CSS classes.
@@ -1167,6 +1179,15 @@ cards +
 
       const body = await upstream.text();
       attemptDetails.push(provider.name + " HTTP " + upstream.status + " (" + body.length + " bytes)");
+      if (provider.name === "Bing") {
+        const structural = [
+          "b_results=" + (body.match(/b_results/gi) || []).length,
+          "b_algo=" + (body.match(/b_algo/gi) || []).length,
+          "ck/a=" + (body.match(/\\/ck\\/a/gi) || []).length,
+          "h2=" + (body.match(/<h2\\b/gi) || []).length
+        ].join(", ");
+        attemptDetails[attemptDetails.length - 1] += " [" + structural + "]";
+      }
       if (!body || body.length < 200) {
         lastError = new Error(provider.name + " returned an empty response");
         continue;
