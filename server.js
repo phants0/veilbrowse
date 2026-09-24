@@ -1151,7 +1151,7 @@ cards +
       $("a[href]").each((_, element) => {
         if (externalLinks.length >= 8) return false;
         const href = $(element).attr("href") || "";
-        const text = $(element).text().replace(/\\s+/g, " ").trim();
+        const text = $(element).text().replace(/\s+/g, " "/g).trim();
         if (!text || text.length < 3) return;
         try {
           const target = new URL(href, provider.url);
@@ -1168,7 +1168,7 @@ cards +
       });
 
       const looksLikeSearchPage =
-        /<form\\b/i.test(body) &&
+        /<form\b/i.test(body) &&
         /search/i.test(body) &&
         externalLinks.length >= 2;
 
