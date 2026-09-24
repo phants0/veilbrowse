@@ -834,7 +834,7 @@ app.get("/search", async (req, res) => {
     },
     {
       name: "Google",
-      url: "https://www.google.com/search?q=" + encodeURIComponent(query) + "&hl=en&safe=active",
+      url: "https://www.google.com/search?q=" + encodeURIComponent(query) + "&hl=en&safe=active&num=20",
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml",
@@ -921,12 +921,19 @@ app.get("/search", async (req, res) => {
       if (link.length) add(link.text(), link.attr("href"), snippet.text());
     });
 
-    // Google result cards.
-    $("div.MjjYud, div[data-snhf], div.g").each((_, element) => {
-      const link = $(element).find("a[href]").filter((__, anchor) => $(anchor).find("h3").length > 0).first();
-      const title = link.find("h3").first();
-      const snippet = $(element).find(".VwiC3b, [data-sncf], div[data-content-feature='1']").first();
-      if (link.length && title.length) add(title.text(), link.attr("href"), snippet.text());
+    // Google result cards. Anchor on the h3 -> parent link structure instead
+    // of Google's frequently changing result-container class names.
+    $("h3").each((_, element) => {
+      const title = $(element);
+      const link = title.closest("a[href]").first();
+      if (!link.length) return;
+
+      const href = link.attr("href") || "";
+      const container = link.closest("div.MjjYud, div.g, div.tF2Cxc, div[data-snhf], div[data-hveid]").first();
+      const snippet = container.find(".VwiC3b, [data-sncf], div[data-content-feature='1'], span.st").first();
+
+      add(title.text(), href, snippet.text());
+      if (results.length >= 20) return false;
     });
 
     // DuckDuckGo's HTML/Lite layouts have changed over time, so use
