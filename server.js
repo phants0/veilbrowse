@@ -496,8 +496,7 @@ function runtimeBridgeScript(targetUrl) {
 
     toggle.addEventListener("click", openSearch);
     overlay.addEventListener("click", (event) => {
-      if (event.target === overlay) closeSearch();
-    });
+      if (event.target === overlay) closeSearch();    });
     box.addEventListener("submit", submitSearch);
 
     document.addEventListener("keydown", (event) => {
@@ -847,8 +846,7 @@ app.get("/search", async (req, res) => {
       },
       format: "xml"
     },
-    {
-      name: "Bing",
+    {      name: "Bing",
       method: "GET",
       url: "https://www.bing.com/search?q=" + encodeURIComponent(query) + "&count=20&setlang=en-US",
       headers: {
@@ -874,43 +872,63 @@ app.get("/search", async (req, res) => {
 
     const cleanText = (value) => String(value || "").replace(/\s+/g, " ").trim();
 
-    const decodeDuckDuckGo = (href) => {
+    const decodeRedirect = (href, provider) => {
       try {
-        const parsed = new URL(href, "https://duckduckgo.com/");
-        const encoded = parsed.searchParams.get("uddg");
-        return encoded ? decodeURIComponent(encoded) : parsed.href;
+        const parsed = new URL(href, provider.startsWith("Bing")
+          ? "https://www.bing.com/"
+          : "https://duckduckgo.com/");
+
+        for (const key of ["uddg", "url", "u"]) {
+          const encoded = parsed.searchParams.get(key);
+          if (encoded) {
+            try {
+              return decodeURIComponent(encoded);
+            } catch {
+              return encoded;
+            }
+          }
+        }
+
+        return parsed.href;
       } catch {
         return href;
       }
     };
 
     const add = (title, href, snippet = "") => {
-      if (!title || !href) return;
+      const cleanTitle = cleanText(title);
+      if (!cleanTitle || cleanTitle.length < 2 || !href) return;
 
       let resolved = String(href).trim();
-      if (!resolved || resolved.startsWith("#") || resolved.startsWith("javascript:")) return;
+      if (!resolved || resolved.startsWith("#") || /^(?:javascript|mailto|tel):/i.test(resolved)) return;
 
-      if (providerName.startsWith("DuckDuckGo")) resolved = decodeDuckDuckGo(resolved);
+      resolved = decodeRedirect(resolved, providerName);
 
       try {
         const baseUrl = providerName.startsWith("Bing")
           ? "https://www.bing.com/"
           : "https://duckduckgo.com/";
         const parsed = new URL(resolved, baseUrl);
+
         if (!["http:", "https:"].includes(parsed.protocol)) return;
 
         const hostname = parsed.hostname.toLowerCase();
-        if (providerName.startsWith("DuckDuckGo") &&
-          (hostname === "duckduckgo.com" || hostname.endsWith(".duckduckgo.com"))) return;
-        if (providerName.startsWith("Bing") &&
-          (hostname === "bing.com" || hostname.endsWith(".bing.com"))) return;
 
-        const cleanTitle = cleanText(title);
-        if (!cleanTitle || cleanTitle.length < 2) return;
+        // Search-engine navigation links are not useful result destinations.
+        if (
+          providerName.startsWith("DuckDuckGo") &&
+          (hostname === "duckduckgo.com" || hostname.endsWith(".duckduckgo.com"))
+        ) return;
+
+        if (
+          providerName.startsWith("Bing") &&
+          (hostname === "bing.com" || hostname.endsWith(".bing.com"))
+        ) return;
 
         const key = parsed.href;
         if (seen.has(key)) return;
         seen.add(key);
+
         results.push({
           title: cleanTitle,
           href: parsed.href,
@@ -920,97 +938,95 @@ app.get("/search", async (req, res) => {
     };
 
     if (providerName === "Bing RSS") {
-      $("item").each((_, element) => {
+      $("item, entry").each((_, element) => {
         const row = $(element);
-        add(
-          row.find("title").first().text(),
-          row.find("link").first().text(),
-          row.find("description").first().text()
-        );
+        const title = row.find("title").first().text();
+        let href = row.find("link").first().text().trim();
+        if (!href) href = row.find("link[href]").first().attr("href") || "";
+        add(title, href, row.find("description, summary").first().text());
         if (results.length >= 20) return false;
       });
       return results.slice(0, 20);
     }
 
-    if (providerName === "DuckDuckGo HTML") {
-      $(".result").each((_, element) => {
-        const row = $(element);
-        const link = row.find("a.result__a[href]").first();
-        if (!link.length) return;
-        add(link.text(), link.attr("href"), row.find(".result__snippet, .result__body").first().text());
-        if (results.length >= 20) return false;
-      });
-
-      // Some DDG responses omit the .result wrapper. The result links
-      // themselves still commonly carry the result__a class.
-      if (results.length === 0) {
-        $("a.result__a[href]").each((_, element) => {
-          const link = $(element);
-          const row = link.closest("div,article,li,table,tr");
-          add(link.text(), link.attr("href"), row.find(".result__snippet, .result__body").first().text());
-          if (results.length >= 20) return false;
-        });
-      }
-
-      // Last DDG-specific fallback: organic links are commonly represented
-      // by an uddg= destination. Ignore ordinary navigation links.
-      if (results.length === 0) {
-        $("a[href*='uddg=']").each((_, element) => {
-          const link = $(element);
-          const title = link.find("h2,h3").first().text() || link.text();
-          const row = link.closest(".result,article,li,div");
-          add(title, link.attr("href"), row.find(".result__snippet,.result__body,p").first().text());
-          if (results.length >= 20) return false;
-        });
-      }
-    }
-
-    if (providerName === "DuckDuckGo Lite") {
-      $("a.result-link[href], a.result__a[href]").each((_, element) => {
+    // First use the documented/common result structures when present.
+    if (providerName === "DuckDuckGo HTML" || providerName === "DuckDuckGo Lite") {
+      $(
+        ".result a.result__a[href], " +
+        "a.result__a[href], " +
+        "a.result-link[href]"
+      ).each((_, element) => {
         const link = $(element);
-        const row = link.closest("tr");
-        add(link.text(), link.attr("href"), row.find("td").last().text());
+        const row = link.closest(".result, article, tr, li, div");
+        add(
+          link.text(),
+          link.attr("href"),
+          row.find(".result__snippet, .result__body, .result__description, p, td").last().text()
+        );
         if (results.length >= 20) return false;
       });
-
-      if (results.length === 0) {
-        $("table tr").each((_, element) => {
-          const row = $(element);
-          const links = row.find("a[href]");
-          const link = links.filter((__, a) => {
-            const href = $(a).attr("href") || "";
-            const text = $(a).text().trim();
-            return text.length > 2 && /^https?:/i.test(href);
-          }).first();
-          if (!link.length) return;
-          add(link.text(), link.attr("href"), row.text());
-          if (results.length >= 20) return false;
-        });
-      }
     }
 
     if (providerName === "Bing") {
-      $("li.b_algo").each((_, element) => {
-        const row = $(element);
-        const link = row.find("h2 a[href], h3 a[href]").first();
-        if (!link.length) return;
-        add(link.text(), link.attr("href"), row.find(".b_caption p, p").first().text());
-        if (results.length >= 20) return false;
-      });
-
-      if (results.length === 0) {
-        $("#b_results h2 a[href], #b_results h3 a[href]").each((_, element) => {
+      $("li.b_algo h2 a[href], li.b_algo h3 a[href], #b_results h2 a[href], #b_results h3 a[href]")
+        .each((_, element) => {
           const link = $(element);
-          const row = link.closest("li,article,div");
-          add(link.text(), link.attr("href"), row.find("p").first().text());
+          const row = link.closest("li, article, div");
+          add(
+            link.text(),
+            link.attr("href"),
+            row.find(".b_caption p, p").first().text()
+          );
           if (results.length >= 20) return false;
         });
-      }
+    }
+
+    // Markup changes frequently. As a provider-independent fallback, inspect
+    // every external link and use its nearest heading/text as the result.
+    // This keeps search functional when DDG/Bing change their CSS classes.
+    if (results.length === 0) {
+      $("a[href]").each((_, element) => {
+        if (results.length >= 20) return false;
+
+        const link = $(element);
+        const href = link.attr("href") || "";
+        const text = cleanText(link.text());
+
+        if (!text || text.length < 3 || text.length > 300) return;
+
+        let parsed;
+        try {
+          parsed = new URL(decodeRedirect(href, providerName),
+            providerName.startsWith("Bing")
+              ? "https://www.bing.com/"
+              : "https://duckduckgo.com/");
+        } catch {
+          return;
+        }
+
+        const hostname = parsed.hostname.toLowerCase();
+        if (
+          hostname === "duckduckgo.com" ||
+          hostname.endsWith(".duckduckgo.com") ||
+          hostname === "bing.com" ||
+          hostname.endsWith(".bing.com")
+        ) return;
+
+        const row = link.closest("article, li, tr, .result, div");
+        const heading = row.find("h1,h2,h3,h4").first().text();
+        const title = cleanText(heading) || text;
+
+        // Ignore obvious page chrome/navigation.
+        if (/^(images?|videos?|news|maps|shopping|settings|more|next|previous|sign in|menu)$/i.test(title)) {
+          return;
+        }
+
+        add(title, href, row.find("p").first().text());
+      });
     }
 
     return results.slice(0, 20);
   }
-
   function renderSearchPage(results, providerName) {
     const cards = results.length
       ? results.map((result) => {
