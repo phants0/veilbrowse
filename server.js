@@ -1026,7 +1026,7 @@ app.get("/search", async (req, res) => {
       // Bing can return result markup that Cheerio normalizes differently from
       // the browser DOM. Recover ordinary h2/h3 result links directly from
       // the response text as a final parser fallback.
-      const headingLinkPattern = /<h[23][^>]*>\\s*<a[^>]+href=["']([^"']+)["'][^>]*>([\\s\\S]*?)<\\/a>\\s*<\\/h[23]>/gi;
+      const headingLinkPattern = /<h[23][^>]*>\s*<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>\s*<\/h[23]>/gi;
       let match;
       while ((match = headingLinkPattern.exec(body)) && results.length < 20) {
         const title = cleanText(match[2].replace(/<[^>]+>/g, " "));
@@ -1183,8 +1183,8 @@ cards +
         const structural = [
           "b_results=" + (body.match(/b_results/gi) || []).length,
           "b_algo=" + (body.match(/b_algo/gi) || []).length,
-          "ck/a=" + (body.match(/\\/ck\\/a/gi) || []).length,
-          "h2=" + (body.match(/<h2\\b/gi) || []).length
+          "ck/a=" + (body.match(/\/ck\/a/gi) || []).length,
+          "h2=" + (body.match(/<h2\b/gi) || []).length
         ].join(", ");
         attemptDetails[attemptDetails.length - 1] += " [" + structural + "]";
       }
