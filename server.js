@@ -878,7 +878,7 @@ app.get("/search", async (req, res) => {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
 
-  function extractResults($, providerName) {
+  function extractResults($, providerName, body) {
     const results = [];
     const seen = new Set();
 
@@ -997,24 +997,41 @@ app.get("/search", async (req, res) => {
     }
 
     if (providerName === "Bing") {
-      $("li.b_algo h2 a[href], li.b_algo h3 a[href], #b_results h2 a[href], #b_results h3 a[href]")
-        .each((_, element) => {
+      const bingSelectors = [
+        "li.b_algo h2 a[href]",
+        "li.b_algo h3 a[href]",
+        "#b_results h2 a[href]",
+        "#b_results h3 a[href]",
+        "#b_results .b_algo a[href]",
+        "#b_results a[href*='/ck/a']"
+      ];
+
+      for (const selector of bingSelectors) {
+        $(selector).each((_, element) => {
           const link = $(element);
-          const row = link.closest("li, article, div");
+          const row = link.closest("li.b_algo, li, article, div");
           add(
             link.text(),
             link.attr("href"),
-            row.find(".b_caption p, p").first().text()
+            row.find(".b_caption p, .b_paractl, p").first().text()
           );
           if (results.length >= 20) return false;
         });
+
+        if (results.length >= 20) break;
+      }
     }
 
     // Markup changes frequently. As a provider-independent fallback, inspect
     // every external link and use its nearest heading/text as the result.
     // This keeps search functional when DDG/Bing change their CSS classes.
     if (results.length === 0) {
-      $("a[href]").each((_, element) => {
+      const fallbackSelectors = providerName === "Bing"
+        ? ["#b_results a[href]", "a[href*='/ck/a']", "a[href]"]
+        : ["a[href]"];
+
+      for (const selector of fallbackSelectors) {
+        $(selector).each((_, element) => {
         if (results.length >= 20) return false;
 
         const link = $(element);
@@ -1052,6 +1069,9 @@ app.get("/search", async (req, res) => {
 
         add(title, href, row.find("p").first().text());
       });
+
+      if (results.length >= 20) break;
+      }
     }
 
     return results.slice(0, 20);
@@ -1167,7 +1187,7 @@ cards +
 
       const { load } = await import("cheerio");
       const $ = load(body, { decodeEntities: true });
-      const results = extractResults($, provider.name);
+      const results = extractResults($, provider.name, body);
 
       if (results.length > 0) {
         res.setHeader("Content-Type", "text/html; charset=utf-8");
