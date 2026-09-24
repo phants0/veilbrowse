@@ -395,12 +395,131 @@ function runtimeBridgeScript(targetUrl) {
     return originalOpen.call(this, method, rewritten || url, ...rest);
   };
 
+
   const originalSendBeacon = navigator.sendBeacon?.bind(navigator);
   if (originalSendBeacon) {
     navigator.sendBeacon = (url, data) => {
       const rewritten = proxy(url);
       return originalSendBeacon(rewritten || url, data);
     };
+  }
+
+  const searchStyle = document.createElement("style");
+  searchStyle.textContent = [
+    "#veilbrowse-search-toggle{position:fixed;top:14px;right:14px;z-index:2147483647;height:38px;padding:0 13px;border:1px solid #30343d;border-radius:10px;background:rgba(17,19,24,.94);color:#cbd0d8;font:600 13px/1 system-ui,-apple-system,BlinkMacSystemFont,sans-serif;cursor:pointer;box-shadow:0 8px 28px rgba(0,0,0,.24);backdrop-filter:blur(12px)}",
+    "#veilbrowse-search-toggle:hover{background:#1a1d23;color:#fff}",
+    "#veilbrowse-search-toggle:focus-visible{outline:2px solid #8ab4ff;outline-offset:2px}",
+    "#veilbrowse-search-overlay{position:fixed;inset:0;z-index:2147483646;display:flex;align-items:flex-start;justify-content:center;padding:12vh 20px 20px;background:rgba(0,0,0,.42);backdrop-filter:blur(3px)}",
+    "#veilbrowse-search-overlay[hidden]{display:none}",
+    "#veilbrowse-search-box{display:flex;gap:8px;width:min(760px,100%);padding:8px;border:1px solid #30343d;border-radius:16px;background:#0f1116;box-shadow:0 24px 80px rgba(0,0,0,.5)}",
+    "#veilbrowse-search-input{flex:1;min-width:0;height:44px;border:0;outline:0;border-radius:10px;background:#171a20;color:#fff;padding:0 14px;font:16px system-ui,-apple-system,BlinkMacSystemFont,sans-serif}",
+    "#veilbrowse-search-input::placeholder{color:#737986}",
+    "#veilbrowse-search-go{height:44px;border:0;border-radius:10px;padding:0 18px;background:#f4f4f5;color:#090a0d;font:700 14px system-ui,-apple-system,BlinkMacSystemFont,sans-serif;cursor:pointer}",
+    "#veilbrowse-search-go:hover{background:#fff}"
+  ].join("");
+
+  const createSearchUi = () => {
+    if (document.getElementById("veilbrowse-search-overlay")) return;
+
+    document.head.appendChild(searchStyle);
+
+    const toggle = document.createElement("button");
+    toggle.id = "veilbrowse-search-toggle";
+    toggle.type = "button";
+    toggle.textContent = "Search";
+    toggle.title = "Open VeilBrowse search (Ctrl+K / ⌘K)";
+    toggle.setAttribute("aria-label", "Open VeilBrowse search");
+
+    const overlay = document.createElement("div");
+    overlay.id = "veilbrowse-search-overlay";
+    overlay.hidden = true;
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-label", "VeilBrowse search");
+
+    const box = document.createElement("form");
+    box.id = "veilbrowse-search-box";
+
+    const searchInput = document.createElement("input");
+    searchInput.id = "veilbrowse-search-input";
+    searchInput.type = "text";
+    searchInput.placeholder = "Search or enter a website URL";
+    searchInput.autocomplete = "off";
+    searchInput.spellcheck = false;
+    searchInput.setAttribute("aria-label", "Search or enter a website URL");
+
+    const go = document.createElement("button");
+    go.id = "veilbrowse-search-go";
+    go.type = "submit";
+    go.textContent = "Go";
+
+    box.append(searchInput, go);
+    overlay.appendChild(box);
+    document.body.append(toggle, overlay);
+
+    const closeSearch = () => {
+      overlay.hidden = true;
+      toggle.focus();
+    };
+
+    const openSearch = () => {
+      overlay.hidden = false;
+      searchInput.value = "";
+      searchInput.focus();
+    };
+
+    const submitSearch = (event) => {
+      event.preventDefault();
+      const value = searchInput.value.trim();
+      if (!value) return;
+
+      if (/^[a-z][a-z0-9+.-]*:/i.test(value) && !/^https?:\/\//i.test(value)) return;
+
+      let destination;
+      try {
+        const candidate = /^(?:https?:\/\/|\/\/)/i.test(value)
+          ? (value.startsWith("//") ? "https:" + value : value)
+          : "https://" + value;
+        const url = new URL(candidate);
+        const looksLikeUrl = /^(?:https?:\/\/|\/\/)/i.test(value) ||
+          /^localhost(?::\d+)?(?:[/?#]|$)/i.test(value) ||
+          /^\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?(?:[/?#]|$)/.test(value) ||
+          (url.hostname.includes(".") && !url.hostname.endsWith("."));
+        destination = looksLikeUrl
+          ? "/proxy?url=" + encodeURIComponent(url.href)
+          : "/search?q=" + encodeURIComponent(value);
+      } catch {
+        destination = "/search?q=" + encodeURIComponent(value);
+      }
+
+      window.location.assign(destination);
+    };
+
+    toggle.addEventListener("click", openSearch);
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) closeSearch();
+    });
+    box.addEventListener("submit", submitSearch);
+
+    document.addEventListener("keydown", (event) => {
+      const modifier = event.ctrlKey || event.metaKey;
+      if (modifier && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        event.stopPropagation();
+        openSearch();
+        return;
+      }
+
+      if (event.key === "Escape" && !overlay.hidden) {
+        event.preventDefault();
+        closeSearch();
+      }
+    }, true);
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", createSearchUi, { once: true });
+  } else {
+    createSearchUi();
   }
 
   window.__VEILBROWSE_TARGET__ = targetBase.href;
