@@ -825,20 +825,6 @@ app.get("/search", async (req, res) => {
       format: "html"
     },
     {
-      name: "DuckDuckGo HTML POST",
-      method: "POST",
-      url: "https://html.duckduckgo.com/html/",
-      body: "q=" + encodeURIComponent(query) + "&kl=us-en&kp=-2",
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Referer": "https://html.duckduckgo.com/html/",
-        "Content-Type": "application/x-www-form-urlencoded"
-      },
-      format: "html"
-    },
-    {
       name: "DuckDuckGo Lite",
       method: "GET",
       url: "https://lite.duckduckgo.com/lite/?q=" + encodeURIComponent(query) + "&kp=-2&kl=us-en",
@@ -849,6 +835,17 @@ app.get("/search", async (req, res) => {
         "Referer": "https://duckduckgo.com/"
       },
       format: "html"
+    },
+    {
+      name: "Bing RSS",
+      method: "GET",
+      url: "https://www.bing.com/search?format=rss&q=" + encodeURIComponent(query),
+      headers: {
+        "User-Agent": "VeilBrowse/1.0",
+        "Accept": "application/rss+xml, application/xml, text/xml;q=0.9",
+        "Accept-Language": "en-US,en;q=0.9"
+      },
+      format: "xml"
     },
     {
       name: "Bing",
@@ -896,42 +893,73 @@ app.get("/search", async (req, res) => {
       if (providerName.startsWith("DuckDuckGo")) resolved = decodeDuckDuckGo(resolved);
 
       try {
-        const baseUrl = providerName === "Bing" ? "https://www.bing.com/" : "https://duckduckgo.com/";
+        const baseUrl = providerName.startsWith("Bing")
+          ? "https://www.bing.com/"
+          : "https://duckduckgo.com/";
         const parsed = new URL(resolved, baseUrl);
         if (!["http:", "https:"].includes(parsed.protocol)) return;
 
         const hostname = parsed.hostname.toLowerCase();
         if (providerName.startsWith("DuckDuckGo") &&
           (hostname === "duckduckgo.com" || hostname.endsWith(".duckduckgo.com"))) return;
-        if (providerName === "Bing" &&
+        if (providerName.startsWith("Bing") &&
           (hostname === "bing.com" || hostname.endsWith(".bing.com"))) return;
 
         const cleanTitle = cleanText(title);
-        const cleanSnippet = cleanText(snippet);
         if (!cleanTitle || cleanTitle.length < 2) return;
 
         const key = parsed.href;
         if (seen.has(key)) return;
         seen.add(key);
-        results.push({ title: cleanTitle, href: parsed.href, snippet: cleanSnippet });
+        results.push({
+          title: cleanTitle,
+          href: parsed.href,
+          snippet: cleanText(snippet)
+        });
       } catch {}
     };
 
-    if (providerName.startsWith("DuckDuckGo")) {
+    if (providerName === "Bing RSS") {
+      $("item").each((_, element) => {
+        const row = $(element);
+        add(
+          row.find("title").first().text(),
+          row.find("link").first().text(),
+          row.find("description").first().text()
+        );
+        if (results.length >= 20) return false;
+      });
+      return results.slice(0, 20);
+    }
+
+    if (providerName === "DuckDuckGo HTML") {
       $(".result").each((_, element) => {
         const row = $(element);
         const link = row.find("a.result__a[href]").first();
         if (!link.length) return;
-        const snippet = row.find(".result__snippet, .result__body").first();
-        add(link.text(), link.attr("href"), snippet.text());
+        add(link.text(), link.attr("href"), row.find(".result__snippet, .result__body").first().text());
         if (results.length >= 20) return false;
       });
 
+      // Some DDG responses omit the .result wrapper. The result links
+      // themselves still commonly carry the result__a class.
       if (results.length === 0) {
         $("a.result__a[href]").each((_, element) => {
           const link = $(element);
           const row = link.closest("div,article,li,table,tr");
           add(link.text(), link.attr("href"), row.find(".result__snippet, .result__body").first().text());
+          if (results.length >= 20) return false;
+        });
+      }
+
+      // Last DDG-specific fallback: organic links are commonly represented
+      // by an uddg= destination. Ignore ordinary navigation links.
+      if (results.length === 0) {
+        $("a[href*='uddg=']").each((_, element) => {
+          const link = $(element);
+          const title = link.find("h2,h3").first().text() || link.text();
+          const row = link.closest(".result,article,li,div");
+          add(title, link.attr("href"), row.find(".result__snippet,.result__body,p").first().text());
           if (results.length >= 20) return false;
         });
       }
@@ -948,7 +976,12 @@ app.get("/search", async (req, res) => {
       if (results.length === 0) {
         $("table tr").each((_, element) => {
           const row = $(element);
-          const link = row.find("a[href]").filter((__, a) => $(a).text().trim().length > 1).first();
+          const links = row.find("a[href]");
+          const link = links.filter((__, a) => {
+            const href = $(a).attr("href") || "";
+            const text = $(a).text().trim();
+            return text.length > 2 && /^https?:/i.test(href);
+          }).first();
           if (!link.length) return;
           add(link.text(), link.attr("href"), row.text());
           if (results.length >= 20) return false;
@@ -961,13 +994,12 @@ app.get("/search", async (req, res) => {
         const row = $(element);
         const link = row.find("h2 a[href], h3 a[href]").first();
         if (!link.length) return;
-        const snippet = row.find(".b_caption p, p").first();
-        add(link.text(), link.attr("href"), snippet.text());
+        add(link.text(), link.attr("href"), row.find(".b_caption p, p").first().text());
         if (results.length >= 20) return false;
       });
 
       if (results.length === 0) {
-        $("h2 a[href], h3 a[href]").each((_, element) => {
+        $("#b_results h2 a[href], #b_results h3 a[href]").each((_, element) => {
           const link = $(element);
           const row = link.closest("li,article,div");
           add(link.text(), link.attr("href"), row.find("p").first().text());
@@ -1057,41 +1089,34 @@ cards +
         headers: provider.headers,
         redirect: "follow"
       };
-
       if (provider.body) requestOptions.body = provider.body;
 
       const upstream = await fetch(provider.url, requestOptions);
-
       if (!upstream.ok) {
         lastError = new Error(provider.name + " returned HTTP " + upstream.status);
         continue;
       }
 
-      const html = await upstream.text();
-      if (!html || html.length < 200) {
+      const body = await upstream.text();
+      if (!body || body.length < 200) {
         lastError = new Error(provider.name + " returned an empty response");
         continue;
       }
 
-      const lowerHtml = html.toLowerCase();
-      const looksLikeDuckDuckGoChallenge =
+      const lowerBody = body.toLowerCase();
+      if (
         provider.name.startsWith("DuckDuckGo") &&
-        (
-          lowerHtml.includes("anomaly detected") ||
-          lowerHtml.includes("unusual traffic") ||
-          lowerHtml.includes("captcha") ||
-          lowerHtml.includes("challenge-form") ||
-          lowerHtml.includes("challenge-spinner") ||
-          lowerHtml.includes("automated requests")
-        );
-
-      if (looksLikeDuckDuckGoChallenge) {
+        (lowerBody.includes("anomaly detected") ||
+          lowerBody.includes("unusual traffic") ||
+          lowerBody.includes("challenge-form") ||
+          lowerBody.includes("challenge-spinner"))
+      ) {
         lastError = new Error(provider.name + " returned a challenge page");
         continue;
       }
 
       const { load } = await import("cheerio");
-      const $ = load(html, { decodeEntities: false });
+      const $ = load(body, { decodeEntities: true });
       const results = extractResults($, provider.name);
 
       if (results.length === 0) {
