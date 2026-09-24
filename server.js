@@ -823,15 +823,6 @@ app.get("/search", async (req, res) => {
       format: "html"
     },
     {
-      name: "Bing RSS",
-      url: "https://www.bing.com/search?format=rss&q=" + encodeURIComponent(query),
-      headers: {
-        "User-Agent": "VeilBrowse/1.0",
-        "Accept": "application/rss+xml, application/xml, text/xml;q=0.9"
-      },
-      format: "xml"
-    },
-    {
       name: "DuckDuckGo Lite",
       url: "https://lite.duckduckgo.com/lite/?q=" + encodeURIComponent(query),
       headers: {
@@ -842,8 +833,8 @@ app.get("/search", async (req, res) => {
       format: "html"
     },
     {
-      name: "Bing",
-      url: "https://www.bing.com/search?q=" + encodeURIComponent(query),
+      name: "Google",
+      url: "https://www.google.com/search?q=" + encodeURIComponent(query) + "&hl=en&safe=active",
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml",
@@ -864,7 +855,7 @@ app.get("/search", async (req, res) => {
     const results = [];
     const seen = new Set();
 
-    const cleanText = (value) => String(value || "").replace(/\\s+/g, " ").trim();
+    const cleanText = (value) => String(value || "").replace(/\s+/g, " ").trim();
 
     const decodeDuckDuckGo = (href) => {
       try {
@@ -921,23 +912,37 @@ app.get("/search", async (req, res) => {
       if (link.length) add(link.text(), link.attr("href"), snippet.text());
     });
 
-    // Bing's normal result cards.
-    $("li.b_algo, #b_results li.b_algo, main li.b_algo").each((_, element) => {
-      const link = $(element).find("h2 a, h2 a[href]").first();
-      const snippet = $(element).find(".b_caption p, .b_snippet, p").first();
-      if (link.length) add(link.text(), link.attr("href"), snippet.text());
+    // Google result cards.
+    $("div.MjjYud, div[data-snhf], div.g").each((_, element) => {
+      const link = $(element).find("a[href]").filter((__, anchor) => $(anchor).find("h3").length > 0).first();
+      const title = link.find("h3").first();
+      const snippet = $(element).find(".VwiC3b, [data-sncf], div[data-content-feature='1']").first();
+      if (link.length && title.length) add(title.text(), link.attr("href"), snippet.text());
     });
 
-    // Broader provider-specific fallback.
-    if (results.length === 0 && providerName === "Bing") {
-      $("h2 a[href], h3 a[href]").each((_, element) => {
+    // DuckDuckGo's HTML/Lite layouts have changed over time, so use
+    // several selectors and fall back to result-like links when needed.
+    if (results.length === 0 && providerName.startsWith("DuckDuckGo")) {
+      $("a.result__a, a.result-link, a.result__url, .result a[href]").each((_, element) => {
         const link = $(element);
-        const parent = link.closest("li, article, div");
-        add(
-          link.text(),
-          link.attr("href"),
-          parent.find(".b_caption p, .b_snippet, p").first().text()
-        );
+        const title = link.find("h2, h3").first().text() || link.text();
+        const parent = link.closest(".result, .web-result, article, li");
+        const snippet = parent.find(".result__snippet, .result-snippet, .result__body").first().text();
+        add(title, link.attr("href"), snippet);
+        if (results.length >= 20) return false;
+      });
+    }
+
+    // Provider-neutral fallback: collect titled external links.
+    if (results.length === 0) {
+      $("a[href]").each((_, element) => {
+        const link = $(element);
+        const title = link.find("h2, h3").first().text() || link.text();
+        const href = link.attr("href") || "";
+        if (title.trim().length < 4 || href.startsWith("#")) return;
+        const parent = link.closest("div,li,article,td");
+        const snippet = parent.find("p").first().text();
+        add(title, href, snippet);
         if (results.length >= 20) return false;
       });
     }
