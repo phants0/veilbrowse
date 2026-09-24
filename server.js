@@ -707,6 +707,18 @@ app.get("/search-debug", async (req, res) => {
   }
 
   const providers = [
+  {
+    name: "DuckDuckGo Web",
+    method: "GET",
+    url: "https://links.duckduckgo.com/d.js?q=" + encodeURIComponent(query) + "&o=json&s=0",
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
+      "Accept": "application/javascript, application/json, text/plain, */*",
+      "Accept-Language": "en-US,en;q=0.9",
+      "Referer": "https://duckduckgo.com/"
+    },
+    format: "json"
+  },
     {
       name: "DuckDuckGo HTML",
       url: "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query) + "&kl=us-en&kp=-2&ia=web",
@@ -937,6 +949,23 @@ app.get("/search", async (req, res) => {
       } catch {}
     };
 
+    if (provider.format === "json") {
+      let payload;
+      try {
+        const match = body.match(/load\(['"]d['"],(.*)\);?\s*$/s);
+        payload = JSON.parse(match ? match[1] : body);
+      } catch {
+        payload = null;
+      }
+
+      if (payload && Array.isArray(payload.results)) {
+        for (const row of payload.results) {
+          add(row.t || row.title || "", row.u || row.url || "", row.a || row.snippet || "");
+          if (results.length >= 20) break;
+        }
+      }
+    }
+
     if (providerName === "Bing RSS") {
       $("item, entry").each((_, element) => {
         const row = $(element);
@@ -1093,6 +1122,7 @@ cards +
   }
 
   let lastError = null;
+  const attemptDetails = [];
 
   for (const provider of providers) {
     const controller = new AbortController();
@@ -1109,11 +1139,14 @@ cards +
 
       const upstream = await fetch(provider.url, requestOptions);
       if (!upstream.ok) {
-        lastError = new Error(provider.name + " returned HTTP " + upstream.status);
+        const detail = provider.name + " HTTP " + upstream.status;
+        attemptDetails.push(detail);
+        lastError = new Error(detail);
         continue;
       }
 
       const body = await upstream.text();
+      attemptDetails.push(provider.name + " HTTP " + upstream.status + " (" + body.length + " bytes)");
       if (!body || body.length < 200) {
         lastError = new Error(provider.name + " returned an empty response");
         continue;
@@ -1127,6 +1160,7 @@ cards +
           lowerBody.includes("challenge-form") ||
           lowerBody.includes("challenge-spinner"))
       ) {
+        attemptDetails[attemptDetails.length - 1] += " challenge";
         lastError = new Error(provider.name + " returned a challenge page");
         continue;
       }
@@ -1180,9 +1214,11 @@ cards +
         return res.send(rewritten);
       }
 
+      attemptDetails[attemptDetails.length - 1] += " no-results";
       lastError = new Error(provider.name + " returned no parseable results");
       continue;
     } catch (error) {
+      attemptDetails.push(provider.name + " " + (error?.name || "error") + ": " + (error?.message || "unknown error"));
       lastError = error;
     } finally {
       clearTimeout(timeout);
@@ -1195,10 +1231,16 @@ cards +
       ? "The search provider responded, but VeilBrowse could not read its results. Please try again."
       : "Search is temporarily unavailable from the proxy server. Please try again.";
 
+  const diagnostic = attemptDetails.length
+    ? "<p style=\"color:#8d94a1;font-size:12px;line-height:1.6\"><strong>Provider diagnostics:</strong><br>" +
+      attemptDetails.map(escapeHtml).join("<br>") +
+      "</p>"
+    : "";
+
   return res.status(502).send(
     "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Search unavailable — VeilBrowse</title>" +
     "<style>body{margin:0;background:#08090c;color:#f4f4f5;font-family:system-ui;padding:40px}main{max-width:760px;margin:auto}a{color:#8ab4ff}</style></head>" +
-    "<body><main><h1>Search unavailable</h1><p>" + escapeHtml(reason) + "</p><p><a href=\"/\">Back to VeilBrowse</a></p></main></body></html>"
+    "<body><main><h1>Search unavailable</h1><p>" + escapeHtml(reason) + "</p>" + diagnostic + "<p><a href=\"/\">Back to VeilBrowse</a></p></main></body></html>"
   );
 });
 app.all("/proxy", async (req, res) => {
