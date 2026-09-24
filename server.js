@@ -949,7 +949,7 @@ app.get("/search", async (req, res) => {
       } catch {}
     };
 
-    if (provider.format === "json") {
+    if (providerName === "DuckDuckGo Web") {
       let payload;
       try {
         const match = body.match(/load\(['"]d['"],(.*)\);?\s*$/s);
@@ -1218,7 +1218,8 @@ cards +
       lastError = new Error(provider.name + " returned no parseable results");
       continue;
     } catch (error) {
-      attemptDetails.push(provider.name + " " + (error?.name || "error") + ": " + (error?.message || "unknown error"));
+      const cause = error?.cause?.code || error?.cause?.name || error?.cause?.message || "";
+      attemptDetails.push(provider.name + " " + (error?.name || "error") + ": " + (error?.message || "unknown error") + (cause ? " [" + cause + "]" : ""));
       lastError = error;
     } finally {
       clearTimeout(timeout);
