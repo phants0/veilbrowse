@@ -890,6 +890,28 @@ app.get("/search", async (req, res) => {
           ? "https://www.bing.com/"
           : "https://duckduckgo.com/");
 
+        const host = parsed.hostname.toLowerCase();
+        if (
+          provider.startsWith("Bing") &&
+          (host === "bing.com" || host.endsWith(".bing.com")) &&
+          parsed.pathname.toLowerCase() === "/ck/a"
+        ) {
+          const encoded = parsed.searchParams.get("u");
+          if (encoded) {
+            let value = encoded;
+            try { value = decodeURIComponent(value); } catch {}
+            if (/^a1[A-Za-z0-9_-]+$/.test(value)) {
+              try {
+                const payload = value.slice(2);
+                if (globalThis.Buffer) {
+                  const decoded = globalThis.Buffer.from(payload, "base64url").toString("utf8");
+                  if (/^https?:\/\//i.test(decoded)) return decoded;
+                }
+              } catch {}
+            }
+          }
+        }
+
         for (const key of ["uddg", "url", "u"]) {
           const encoded = parsed.searchParams.get(key);
           if (encoded) {
