@@ -305,3 +305,11 @@ h1 {
 
 .file-picker-button { position:relative; overflow:hidden; }
 .local-file-input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }
+
+.file-picker-button {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  box-sizing:border-box;
+  line-height:1;
+}
