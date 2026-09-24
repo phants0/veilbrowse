@@ -1135,15 +1135,53 @@ cards +
       const $ = load(body, { decodeEntities: true });
       const results = extractResults($, provider.name);
 
-      if (results.length === 0) {
-        lastError = new Error(provider.name + " returned no parseable results");
-        continue;
+      if (results.length > 0) {
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.setHeader("Cache-Control", "no-store, private, max-age=0");
+        res.setHeader("Referrer-Policy", "no-referrer");
+        return res.send(renderSearchPage(results, provider.name));
       }
 
-      res.setHeader("Content-Type", "text/html; charset=utf-8");
-      res.setHeader("Cache-Control", "no-store, private, max-age=0");
-      res.setHeader("Referrer-Policy", "no-referrer");
-      return res.send(renderSearchPage(results, provider.name));
+      // If the provider returned a real search page but its markup changed,
+      // preserve the provider page instead of failing because our scraper
+      // could not identify individual result cards. rewriteHtml() proxies
+      // the page's links/assets through VeilBrowse and keeps the search
+      // session on the proxy.
+      const externalLinks = [];
+      $("a[href]").each((_, element) => {
+        if (externalLinks.length >= 8) return false;
+        const href = $(element).attr("href") || "";
+        const text = $(element).text().replace(/\\s+/g, " ").trim();
+        if (!text || text.length < 3) return;
+        try {
+          const target = new URL(href, provider.url);
+          const host = target.hostname.toLowerCase();
+          if (!["http:", "https:"].includes(target.protocol)) return;
+          if (
+            (provider.name.startsWith("DuckDuckGo") &&
+              (host === "duckduckgo.com" || host.endsWith(".duckduckgo.com"))) ||
+            (provider.name.startsWith("Bing") &&
+              (host === "bing.com" || host.endsWith(".bing.com")))
+          ) return;
+          externalLinks.push(target.href);
+        } catch {}
+      });
+
+      const looksLikeSearchPage =
+        /<form\\b/i.test(body) &&
+        /search/i.test(body) &&
+        externalLinks.length >= 2;
+
+      if (looksLikeSearchPage) {
+        const rewritten = await rewriteHtml(body, new URL(provider.url));
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.setHeader("Cache-Control", "no-store, private, max-age=0");
+        res.setHeader("Referrer-Policy", "no-referrer");
+        return res.send(rewritten);
+      }
+
+      lastError = new Error(provider.name + " returned no parseable results");
+      continue;
     } catch (error) {
       lastError = error;
     } finally {
