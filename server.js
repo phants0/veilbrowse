@@ -710,7 +710,7 @@ app.get("/search-debug", async (req, res) => {
   const providers = [
     {
       name: "DuckDuckGo HTML",
-      url: "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query),
+      url: "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query) + "&kl=us-en&kp=-2&ia=web",
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml",
@@ -818,13 +818,14 @@ app.get("/search", async (req, res) => {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml",
-        "Accept-Language": "en-US,en;q=0.9"
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://duckduckgo.com/"
       },
       format: "html"
     },
     {
       name: "DuckDuckGo Lite",
-      url: "https://lite.duckduckgo.com/lite/?q=" + encodeURIComponent(query),
+      url: "https://lite.duckduckgo.com/lite/?q=" + encodeURIComponent(query) + "&kp=-2&kl=us-en",
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml",
@@ -915,11 +916,31 @@ app.get("/search", async (req, res) => {
     };
 
     // DuckDuckGo Lite / HTML.
-    $(".result, .web-result, .result.results_links").each((_, element) => {
-      const link = $(element).find("a.result__a, a.result-link, a.result__url").first();
-      const snippet = $(element).find(".result__snippet, .result-snippet, .result__body").first();
+    $(".result, .web-result, .result.results_links, .result--sep").each((_, element) => {
+      const link = $(element).find(
+        "a.result__a, a.result-link, a.result__url, a.result__title, h2 a[href], h3 a[href]"
+      ).first();
+      const snippet = $(element).find(
+        ".result__snippet, .result-snippet, .result__body, .result__extras, .snippet"
+      ).first();
       if (link.length) add(link.text(), link.attr("href"), snippet.text());
     });
+
+    // DDG Lite commonly exposes results as links inside result rows.
+    if (providerName === "DuckDuckGo Lite") {
+      $("a.result-link, a.result__a, table tr").each((_, element) => {
+        const row = $(element);
+        const link = row.is("a")
+          ? row
+          : row.find("a[href]").filter((__, a) => $(a).text().trim().length > 1).first();
+        if (!link.length) return;
+
+        const title = link.text();
+        const snippet = row.find(".result-snippet, .result__snippet, td").last().text();
+        add(title, link.attr("href"), snippet);
+        if (results.length >= 20) return false;
+      });
+    }
 
     // Google result cards. Anchor on the h3 -> parent link structure instead
     // of Google's frequently changing result-container class names.
@@ -1067,6 +1088,24 @@ cards +
       const html = await upstream.text();
       if (!html || html.length < 200) {
         lastError = new Error(provider.name + " returned an empty response");
+        continue;
+      }
+
+      // DDG can return an interstitial/challenge page instead of results.
+      // Do not mistake its navigation links for actual search results.
+      const lowerHtml = html.toLowerCase();
+      const looksLikeDuckDuckGoChallenge =
+        provider.name.startsWith("DuckDuckGo") &&
+        (
+          lowerHtml.includes("anomaly detected") ||
+          lowerHtml.includes("unusual traffic") ||
+          lowerHtml.includes("captcha") ||
+          lowerHtml.includes("challenge-form") ||
+          lowerHtml.includes("challenge-spinner")
+        );
+
+      if (looksLikeDuckDuckGoChallenge) {
+        lastError = new Error(provider.name + " returned a challenge page");
         continue;
       }
 
