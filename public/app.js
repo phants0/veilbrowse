@@ -254,59 +254,65 @@ function highlightCode(source, language) {
   const stash = (html, className) => {
     const id = tokens.length;
     tokens.push('<span class="tok-' + className + '">' + html + '</span>');
-    return " " + id + " ";
+    return "\u0000" + id + "\u0000";
   };
 
   let value = escapeHtml(source);
 
-  const patterns = [];
-  (rules.comments || []).forEach((pattern) => patterns.push(["comment", pattern]));
-  (rules.strings || []).forEach((pattern) => patterns.push(["string", pattern]));
-  if (rules.keywords) patterns.push(["keyword", rules.keywords]);
-  if (rules.literals) patterns.push(["literal", rules.literals]);
-  if (rules.numbers) patterns.push(["number", rules.numbers]);
-
-  // Protect comments/strings first, then highlight syntax in the remaining text.
-  for (const [className, pattern] of patterns.slice(0, (rules.comments || []).length + (rules.strings || []).length)) {
-    value = value.replace(pattern, (match) => stash(match, className));
+  // Protect comments and strings before applying word-based highlighting.
+  for (const pattern of (rules.comments || [])) {
+    value = value.replace(pattern, (match) => stash(match, "comment"));
+  }
+  for (const pattern of (rules.strings || [])) {
+    value = value.replace(pattern, (match) => stash(match, "string"));
   }
 
-  const rest = value.replace(/ d+ /g, "");
-  const placeholders = value.match(/ d+ /g) || [];
-  const rebuilt = rest.replace(rules.keywords || /(?!)/g, (match) => stash(match, "keyword"))
-    .replace(rules.literals || /(?!)/g, (match) => stash(match, "literal"))
-    .replace(rules.numbers || /(?!)/g, (match) => stash(match, "number"));
+  const parts = value.split(/(\u0000\d+\u0000)/g);
+  const highlighted = parts.map((part) => {
+    if (/^\u0000\d+\u0000$/.test(part)) return part;
 
-  let output = rebuilt;
-  let index = 0;
-  output = value.replace(/ d+ |[sS]+/g, (part) => {
-    if (/^ d+ $/.test(part)) return tokens[Number(part.slice(1, -1))];
-    const highlighted = part.replace(rules.keywords || /(?!)/g, (match) => stash(match, "keyword"))
-      .replace(rules.literals || /(?!)/g, (match) => stash(match, "literal"))
-      .replace(rules.numbers || /(?!)/g, (match) => stash(match, "number"));
-    index++;
-    return highlighted;
-  });
+    let chunk = part;
+    if (rules.keywords) chunk = chunk.replace(rules.keywords, (match) => stash(match, "keyword"));
+    if (rules.literals) chunk = chunk.replace(rules.literals, (match) => stash(match, "literal"));
+    if (rules.numbers) chunk = chunk.replace(rules.numbers, (match) => stash(match, "number"));
+    return chunk;
+  }).join("");
 
-  return output;
+  return highlighted.replace(/\u0000(\d+)\u0000/g, (_, id) => tokens[Number(id)]);
 }
 
 function highlightStructured(source, language) {
+  const tokens = [];
+  const stash = (html, className) => {
+    const id = tokens.length;
+    tokens.push('<span class="tok-' + className + '">' + html + '</span>');
+    return "\u0000" + id + "\u0000";
+  };
+
   let html = escapeHtml(source);
+
   if (language === "json") {
-    html = html
-      .replace(/(&quot;(?:\\\\.|[^&])*?&quot;)(\\s*:)/g, '<span class="tok-property">$1</span>$2')
-      .replace(/(&quot;(?:\\\\.|[^&])*?&quot;)/g, '<span class="tok-string">$1</span>')
-      .replace(/\\b(true|false|null)\\b/g, '<span class="tok-literal">$1</span>')
-      .replace(/\\b-?\\d+(?:\\.\\d+)?(?:e[+-]?\\d+)?\\b/gi, '<span class="tok-number">$1</span>');
+    html = html.replace(/(&quot;(?:\\\\.|[^&])*?&quot;)(?=\s*:)/g, (match) => stash(match, "property"));
+    html = html.replace(/(&quot;(?:\\\\.|[^&])*?&quot;)/g, (match) => stash(match, "string"));
+    html = html.replace(/\b(?:true|false|null)\b/g, (match) => stash(match, "literal"));
+    html = html.replace(/\b-?\d+(?:\.\d+)?(?:e[+-]?\d+)?\b/gi, (match) => stash(match, "number"));
   } else {
-    html = html
-      .replace(/(^|\\n)(\\s*)([A-Za-z_][\\w.-]*)(\\s*:)/g, '$1$2<span class="tok-property">$3</span>$4')
-      .replace(/(&quot;(?:\\\\.|[^&])*?&quot;|&#39;(?:\\\\.|[^&])*?&#39;)/g, '<span class="tok-string">$1</span>')
-      .replace(/\\b(?:true|false|null|yes|no)\\b/gi, '<span class="tok-literal">$&</span>')
-      .replace(/\\b-?\\d+(?:\\.\\d+)?\\b/g, '<span class="tok-number">$&</span>');
+    const parts = html.split(/(\u0000\d+\u0000)/g);
+    html = parts.map((part) => {
+      if (/^\u0000\d+\u0000$/.test(part)) return part;
+      let chunk = part;
+      if (language === "yaml") {
+        chunk = chunk.replace(/(^|\n)(\s*)([A-Za-z_][\w.-]*)(\s*:)/g, '$1$2' + '<span class="tok-property">$3</span>$4');
+      } else {
+        chunk = chunk.replace(/(^|\n)(\s*)([A-Za-z_][\w.-]*)(\s*=)/g, '$1$2' + '<span class="tok-property">$3</span>$4');
+      }
+      chunk = chunk.replace(/\b(?:true|false|null|yes|no)\b/gi, (match) => stash(match, "literal"));
+      chunk = chunk.replace(/\b-?\d+(?:\.\d+)?\b/g, (match) => stash(match, "number"));
+      return chunk;
+    }).join("");
   }
-  return html;
+
+  return html.replace(/\u0000(\d+)\u0000/g, (_, id) => tokens[Number(id)]);
 }
 
 function logConsole(message, type = "log") {
