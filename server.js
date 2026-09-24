@@ -890,6 +890,34 @@ app.get("/search", async (req, res) => {
           ? "https://www.bing.com/"
           : "https://duckduckgo.com/");
 
+        if (
+          provider.startsWith("Bing") &&
+          parsed.hostname.toLowerCase().endsWith("bing.com") &&
+          parsed.pathname.toLowerCase() === "/ck/a"
+        ) {
+          const encoded = parsed.searchParams.get("u");
+          if (encoded) {
+            let value = encoded;
+
+            try {
+              value = decodeURIComponent(value);
+            } catch {}
+
+            // Bing's ck/a redirect stores the destination in URL-safe base64
+            // with a short prefix such as "a1".
+            if (/^a1[A-Za-z0-9_-]+$/.test(value)) {
+              try {
+                let payload = value.slice(2).replace(/-/g, "+").replace(/_/g, "/");
+                payload += "=".repeat((4 - (payload.length % 4)) % 4);
+                const decoded = Buffer.from(payload, "base64").toString("utf8");
+                if (/^https?:\\/\\//i.test(decoded)) return decoded;
+              } catch {}
+            }
+
+            if (/^https?:\\/\\//i.test(value)) return value;
+          }
+        }
+
         for (const key of ["uddg", "url", "u"]) {
           const encoded = parsed.searchParams.get(key);
           if (encoded) {
