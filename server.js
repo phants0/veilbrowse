@@ -1185,7 +1185,7 @@ cards +
       $("a[href]").each((_, element) => {
         if (externalLinks.length >= 8) return false;
         const href = $(element).attr("href") || "";
-        const text = $(element).text().replace(/\s+/g, " "/g).trim();
+        const text = $(element).text().replace(/\s+/g, " ").trim();
         if (!text || text.length < 3) return;
         try {
           const target = new URL(href, provider.url);
