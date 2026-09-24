@@ -875,10 +875,19 @@ app.get("/search", async (req, res) => {
 
       if (providerName.startsWith("DuckDuckGo")) {
         resolved = decodeDuckDuckGo(resolved);
+      } else if (providerName === "Google") {
+        try {
+          const googleUrl = new URL(resolved, "https://www.google.com/");
+          const target = googleUrl.searchParams.get("url") || googleUrl.searchParams.get("q");
+          if (target && /^https?:\/\//i.test(target)) resolved = target;
+        } catch {}
       }
 
       try {
-        const parsed = new URL(resolved, providerName === "Bing" ? "https://www.bing.com/" : "https://duckduckgo.com/");
+        const baseUrl = providerName === "Google"
+          ? "https://www.google.com/"
+          : "https://duckduckgo.com/";
+        const parsed = new URL(resolved, baseUrl);
         if (!["http:", "https:"].includes(parsed.protocol)) return;
 
         const hostname = parsed.hostname.toLowerCase();
