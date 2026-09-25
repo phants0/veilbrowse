@@ -458,6 +458,30 @@ function runtimeBridgeScript(targetUrl) {
     };
   }
 
+  const wrapSetter = (prototype, property) => {
+    try {
+      const descriptor = Object.getOwnPropertyDescriptor(prototype, property);
+      if (!descriptor?.set || !descriptor.get) return;
+      Object.defineProperty(prototype, property, {
+        ...descriptor,
+        set(value) {
+          const rewritten = proxy(value);
+          descriptor.set.call(this, rewritten || value);
+        }
+      });
+    } catch {}
+  };
+
+  wrapSetter(window.HTMLScriptElement?.prototype, "src");
+  wrapSetter(window.HTMLLinkElement?.prototype, "href");
+  wrapSetter(window.HTMLImageElement?.prototype, "src");
+  wrapSetter(window.HTMLSourceElement?.prototype, "src");
+  wrapSetter(window.HTMLMediaElement?.prototype, "src");
+  wrapSetter(window.HTMLIFrameElement?.prototype, "src");
+  wrapSetter(window.HTMLObjectElement?.prototype, "data");
+  wrapSetter(window.HTMLEmbedElement?.prototype, "src");
+  wrapSetter(window.HTMLTrackElement?.prototype, "src");
+
   const searchStyle = document.createElement("style");
   searchStyle.textContent = [
     "#veilbrowse-search-toggle{position:fixed;top:14px;right:14px;z-index:2147483647;height:38px;padding:0 13px;border:1px solid #30343d;border-radius:10px;background:rgba(17,19,24,.94);color:#cbd0d8;font:600 13px/1 system-ui,-apple-system,BlinkMacSystemFont,sans-serif;cursor:pointer;box-shadow:0 8px 28px rgba(0,0,0,.24);backdrop-filter:blur(12px)}",
