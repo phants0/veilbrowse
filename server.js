@@ -1,6 +1,6 @@
 import express from "express";
 import http from "node:http";
-import { WebSocketServer, WebSocket } from "ws";
+import WebSocket, { WebSocketServer } from "ws";
 import dns from "node:dns/promises";
 import net from "node:net";
 import crypto from "node:crypto";
@@ -1842,4 +1842,4 @@ app.use((_req, res) => {
   });
 });
 
-httpServer.listen(PORT, () => {});
+httpServer.listen(PORT, () => {});\nhttpServer.on("error", (error) => {\n  console.error("VeilBrowse server error:", error);\n});
