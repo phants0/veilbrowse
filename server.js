@@ -530,6 +530,9 @@ function runtimeBridgeScript(targetUrl) {
 
   wrapSetter(window.HTMLScriptElement?.prototype, "src");
   wrapSetter(window.HTMLLinkElement?.prototype, "href");
+  wrapSetter(window.HTMLAnchorElement?.prototype, "href");
+  wrapSetter(window.HTMLAreaElement?.prototype, "href");
+  wrapSetter(window.HTMLFormElement?.prototype, "action");
   wrapSetter(window.HTMLImageElement?.prototype, "src");
   wrapSetter(window.HTMLSourceElement?.prototype, "src");
   wrapSetter(window.HTMLMediaElement?.prototype, "src");
@@ -537,6 +540,49 @@ function runtimeBridgeScript(targetUrl) {
   wrapSetter(window.HTMLObjectElement?.prototype, "data");
   wrapSetter(window.HTMLEmbedElement?.prototype, "src");
   wrapSetter(window.HTMLTrackElement?.prototype, "src");
+
+  const rewriteDynamicLinks = (root) => {
+    try {
+      const elements = [];
+      if (root?.nodeType === 1 && root.matches?.("a[href], area[href], form[action]")) {
+        elements.push(root);
+      }
+      root?.querySelectorAll?.("a[href], area[href], form[action]").forEach((element) => {
+        elements.push(element);
+      });
+
+      for (const element of elements) {
+        const attribute = element.matches("form[action]") ? "action" : "href";
+        const value = element.getAttribute(attribute);
+        if (!value || value.startsWith("#") || value.startsWith("javascript:")) continue;
+        const rewritten = proxy(value);
+        if (rewritten) element.setAttribute(attribute, rewritten);
+      }
+    } catch {}
+  };
+
+  const linkObserver = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes) rewriteDynamicLinks(node);
+      if (mutation.type === "attributes") rewriteDynamicLinks(mutation.target);
+    }
+  });
+
+  const startLinkObserver = () => {
+    rewriteDynamicLinks(document);
+    linkObserver.observe(document.documentElement, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["href", "action"]
+    });
+  };
+
+  if (document.documentElement) {
+    startLinkObserver();
+  } else {
+    document.addEventListener("DOMContentLoaded", startLinkObserver, { once: true });
+  }
 
   if (window.EventSource) {
     const OriginalEventSource = window.EventSource;
