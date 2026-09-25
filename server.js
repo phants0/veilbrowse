@@ -1,4 +1,6 @@
 import express from "express";
+import http from "node:http";
+import { WebSocketServer, WebSocket } from "ws";
 import dns from "node:dns/promises";
 import net from "node:net";
 import crypto from "node:crypto";
@@ -294,11 +296,29 @@ async function assertSafeTarget(rawUrl) {
   return target;
 }
 
+function siteKeyForTarget(targetUrl, baseUrl) {
+  try {
+    const absolute = new URL(targetUrl, baseUrl);
+    return Buffer.from(absolute.origin).toString("base64url");
+  } catch {
+    return "";
+  }
+}
+
+function sitePrefixForTarget(targetUrl, baseUrl) {
+  const key = siteKeyForTarget(targetUrl, baseUrl);
+  return key ? "/site/" + key : "";
+}
+
 function proxyUrl(targetUrl, baseUrl) {
   try {
     const absolute = new URL(targetUrl, baseUrl);
     if (!["http:", "https:"].includes(absolute.protocol)) return "#";
-    return "/proxy?url=" + encodeURIComponent(absolute.href);
+
+    const prefix = sitePrefixForTarget(absolute.href);
+    if (!prefix) return "#";
+
+    return prefix + "/resource?url=" + encodeURIComponent(absolute.href);
   } catch {
     return "#";
   }
@@ -413,10 +433,12 @@ function rewriteCss(css, baseUrl) {
 
 function runtimeBridgeScript(targetUrl) {
   const encodedTarget = JSON.stringify(targetUrl);
+  const encodedSitePrefix = JSON.stringify(sitePrefixForTarget(targetUrl));
 
   return `<script data-veilbrowse-runtime>
 (() => {
   const targetBase = new URL(${encodedTarget});
+  const sitePrefix = ${encodedSitePrefix};
   const proxy = (input) => {
     try {
       const raw = typeof input === "string" ? input : input?.url;
@@ -429,11 +451,64 @@ function runtimeBridgeScript(targetUrl) {
         return absolute.href;
       }
 
-      return location.origin + "/proxy?url=" + encodeURIComponent(absolute.href);
+      return location.origin + sitePrefix + "/resource?url=" + encodeURIComponent(absolute.href);
     } catch {
       return null;
     }
   };
+
+  const proxyWebSocket = (input) => {
+    try {
+      const absolute = new URL(input, targetBase);
+      if (!["ws:", "wss:", "http:", "https:"].includes(absolute.protocol)) return null;
+
+      if (absolute.protocol === "http:") absolute.protocol = "ws:";
+      if (absolute.protocol === "https:") absolute.protocol = "wss:";
+
+      const localProtocol = location.protocol === "https:" ? "wss:" : "ws:";
+      return localProtocol + "//" + location.host + sitePrefix + "/ws?url=" + encodeURIComponent(absolute.href);
+    } catch {
+      return null;
+    }
+  };
+
+  const originalWebSocket = window.WebSocket;
+  if (originalWebSocket) {
+    window.WebSocket = class extends originalWebSocket {
+      constructor(url, protocols) {
+        super(proxyWebSocket(url) || url, protocols);
+      }
+    };
+    window.WebSocket.CONNECTING = originalWebSocket.CONNECTING;
+    window.WebSocket.OPEN = originalWebSocket.OPEN;
+    window.WebSocket.CLOSING = originalWebSocket.CLOSING;
+    window.WebSocket.CLOSED = originalWebSocket.CLOSED;
+  }
+
+  if (navigator.serviceWorker?.register) {
+    const originalRegister = navigator.serviceWorker.register.bind(navigator.serviceWorker);
+    navigator.serviceWorker.register = (scriptURL, options = {}) => {
+      try {
+        const absolute = new URL(scriptURL, targetBase);
+        if (absolute.origin !== targetBase.origin) {
+          return originalRegister(scriptURL, options);
+        }
+
+        const rewrittenScript = location.origin + sitePrefix +
+          "/service-worker?url=" + encodeURIComponent(absolute.href);
+        const nextOptions = { ...options };
+        const requestedScope = options.scope
+          ? new URL(options.scope, targetBase).pathname
+          : "/";
+        nextOptions.scope = sitePrefix +
+          (requestedScope.startsWith("/") ? requestedScope : "/" + requestedScope);
+
+        return originalRegister(rewrittenScript, nextOptions);
+      } catch {
+        return originalRegister(scriptURL, options);
+      }
+    };
+  }
 
   const originalFetch = window.fetch.bind(window);
   window.fetch = (input, init) => {
@@ -1438,11 +1513,29 @@ cards +
     "<body><main><h1>Search unavailable</h1><p>" + escapeHtml(reason) + "</p>" + diagnostic + "<p><a href=\"/\">Back to VeilBrowse</a></p></main></body></html>"
   );
 });
-app.all("/proxy", async (req, res) => {
+async function handleProxyRequest(req, res) {
   const rawUrl = typeof req.query.url === "string" ? req.query.url.trim() : "";
+  const isSiteRoute = req.path.startsWith("/site/");
+  const isDocumentNavigation =
+    req.method === "GET" &&
+    req.headers["sec-fetch-dest"] === "document";
 
   if (!rawUrl) {
     return res.status(400).send("Missing URL");
+  }
+
+  if (!isSiteRoute && isDocumentNavigation) {
+    let navigationTarget;
+    try {
+      navigationTarget = await assertSafeTarget(rawUrl);
+    } catch (error) {
+      return res.status(400).send(error.message);
+    }
+
+    return res.redirect(
+      sitePrefixForTarget(navigationTarget.href) +
+      "/page?url=" + encodeURIComponent(navigationTarget.href)
+    );
   }
 
   if (!["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"].includes(req.method)) {
@@ -1543,12 +1636,36 @@ app.all("/proxy", async (req, res) => {
 
     if (isJavaScript) {
       const source = await upstream.text();
-      const rewritten = rewriteJavaScript(source, currentTarget.href);
+      const isServiceWorker =
+        req.headers["service-worker"] === "script" ||
+        req.headers["sec-fetch-dest"] === "serviceworker";
+
+      let rewritten = rewriteJavaScript(source, currentTarget.href);
+
+      if (isServiceWorker) {
+        const sitePrefix = sitePrefixForTarget(currentTarget.href);
+        const serviceWorkerBridge =
+          "(function(){const base=new URL(" + JSON.stringify(currentTarget.href) + ");" +
+          "const prefix=" + JSON.stringify(sitePrefix) + ";" +
+          "const originalFetch=self.fetch.bind(self);" +
+          "self.fetch=function(input,init){try{const raw=typeof input===\"string\"?input:input&&input.url;" +
+          "const absolute=new URL(raw,base);" +
+          "if([\"http:\",\"https:\"].includes(absolute.protocol)){" +
+          "const local=location.origin+prefix+\"/resource?url=\"+encodeURIComponent(absolute.href);" +
+          "return originalFetch(input instanceof Request?new Request(local,input):local,init);}}" +
+          "catch(e){}return originalFetch(input,init);};})();\\n";
+        rewritten = serviceWorkerBridge + rewritten;
+      }
 
       res.removeHeader("Content-Encoding");
       res.removeHeader("Content-Length");
       res.removeHeader("ETag");
       res.setHeader("Content-Type", upstream.headers.get("content-type") || "text/javascript; charset=utf-8");
+
+      if (isServiceWorker) {
+        res.setHeader("Service-Worker-Allowed", sitePrefixForTarget(currentTarget.href) + "/");
+      }
+
       return res.status(upstream.status).send(rewritten);
     }
 
@@ -1567,6 +1684,155 @@ app.all("/proxy", async (req, res) => {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+app.all("/proxy", handleProxyRequest);
+
+app.use("/site", express.raw({
+  type: () => true,
+  limit: "10mb"
+}));
+
+app.all("/site/{*splat}", handleProxyRequest);
+
+const httpServer = http.createServer(app);
+const websocketServer = new WebSocketServer({ noServer: true, clientTracking: false });
+
+httpServer.on("upgrade", async (req, socket, head) => {
+  const requestUrl = new URL(req.url || "/", "http://veilbrowse.local");
+  if (!requestUrl.pathname.startsWith("/site/") || !requestUrl.pathname.endsWith("/ws")) {
+    socket.destroy();
+    return;
+  }
+
+  const rawTarget = requestUrl.searchParams.get("url") || "";
+  if (!/^wss?:\\/\\//i.test(rawTarget)) {
+    socket.destroy();
+    return;
+  }
+
+  let target;
+  try {
+    const httpTarget = rawTarget.replace(/^ws:/i, "http:").replace(/^wss:/i, "https:");
+    target = await assertSafeTarget(httpTarget);
+  } catch {
+    socket.destroy();
+    return;
+  }
+
+  const expectedPrefix = sitePrefixForTarget(target.href);
+  if (!requestUrl.pathname.startsWith(expectedPrefix + "/")) {
+    socket.destroy();
+    return;
+  }
+
+  const sessionMatch = typeof req.headers.cookie === "string"
+    ? req.headers.cookie.match(/(?:^|;\\s*)vb_sid=([^;]+)/)
+    : null;
+  const sessionId = sessionMatch?.[1];
+  const session = sessionId && sessions.get(sessionId);
+
+  const targetUrl = target.href.replace(/^https:/i, "wss:").replace(/^http:/i, "ws:");
+  const protocols = typeof req.headers["sec-websocket-protocol"] === "string"
+    ? req.headers["sec-websocket-protocol"].split(",").map((value) => value.trim()).filter(Boolean)
+    : [];
+
+  const headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36"
+  };
+
+  if (session) {
+    session.lastUsed = Date.now();
+    const cookie = getCookieHeader(session, target);
+    if (cookie) headers.Cookie = cookie;
+  }
+
+  if (req.headers.origin) headers.Origin = target.origin;
+  if (req.headers.referer) headers.Referer = target.href;
+
+  websocketServer.handleUpgrade(req, socket, head, (client) => {
+    const upstream = new WebSocket(targetUrl, protocols, {
+      headers,
+      followRedirects: false,
+      handshakeTimeout: 15000,
+      perMessageDeflate: true
+    });
+
+    const pending = [];
+    let upstreamReady = false;
+    let closed = false;
+
+    const closeBoth = (code = 1000, reason = "") => {
+      if (closed) return;
+      closed = true;
+      try { client.close(code, reason); } catch {}
+      try { upstream.close(code, reason); } catch {}
+    };
+
+    client.on("message", (data, isBinary) => {
+      if (closed) return;
+
+      if (!upstreamReady) {
+        const size = data?.byteLength ?? data?.length ?? 0;
+        const pendingBytes = pending.reduce((total, item) => total + item.size, 0);
+        if (pendingBytes + size > 2 * 1024 * 1024) {
+          closeBoth(1009, "Proxy buffer limit");
+          return;
+        }
+        pending.push({ data, isBinary, size });
+        return;
+      }
+
+      try {
+        upstream.send(data, { binary: isBinary });
+      } catch {
+        closeBoth(1011, "Upstream send failed");
+      }
+    });
+
+    client.on("close", (code, reason) => {
+      try { upstream.close(code, reason); } catch {}
+    });
+
+    client.on("error", () => {
+      try { upstream.close(); } catch {}
+    });
+
+    upstream.on("open", () => {
+      upstreamReady = true;
+      for (const item of pending.splice(0)) {
+        try {
+          upstream.send(item.data, { binary: item.isBinary });
+        } catch {
+          closeBoth(1011, "Upstream send failed");
+          return;
+        }
+      }
+    });
+
+    upstream.on("message", (data, isBinary) => {
+      if (closed || client.readyState !== WebSocket.OPEN) return;
+      try {
+        client.send(data, { binary: isBinary });
+      } catch {
+        closeBoth(1011, "Client send failed");
+      }
+    });
+
+    upstream.on("close", (code, reason) => {
+      if (!closed) {
+        closed = true;
+        try { client.close(code, reason); } catch {}
+      }
+    });
+
+    upstream.on("error", () => {
+      if (!closed) {
+        closed = true;
+        try { client.close(1011, "Upstream WebSocket error"); } catch {}
+      }
+    });
+  });
 });
 
 app.use((_req, res) => {
@@ -1575,4 +1841,4 @@ app.use((_req, res) => {
   });
 });
 
-app.listen(PORT, () => {});
+httpServer.listen(PORT, () => {});
