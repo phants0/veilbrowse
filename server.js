@@ -766,6 +766,32 @@ async function rewriteHtml(html, baseUrl) {
   return $.html();
 }
 
+
+async function fetchWithRetry(url, options = {}, { retries = 1 } = {}) {
+  const method = String(options.method || "GET").toUpperCase();
+  const retryableMethod = ["GET", "HEAD", "OPTIONS"].includes(method);
+  const maxAttempts = retryableMethod ? retries + 1 : 1;
+  let lastError;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const response = await fetch(url, options);
+      if (attempt < maxAttempts - 1 && [502, 503, 504].includes(response.status)) {
+        try { await response.body?.cancel(); } catch {}
+        await new Promise((resolve) => setTimeout(resolve, 150 * (attempt + 1)));
+        continue;
+      }
+      return response;
+    } catch (error) {
+      lastError = error;
+      if (attempt >= maxAttempts - 1) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 150 * (attempt + 1)));
+    }
+  }
+
+  throw lastError || new Error("Upstream request failed");
+}
+
 function copyResponseHeaders(upstream, response) {
   for (const header of PASS_RESPONSE_HEADERS) {
     const value = upstream.headers.get(header);
@@ -885,7 +911,7 @@ app.get("/search-debug", async (req, res) => {
     const timeout = setTimeout(() => controller.abort(), 10000);
 
     try {
-      const upstream = await fetch(provider.url, {
+      const upstream = await fetchWithRetry(provider.url, {
         signal: controller.signal,
         headers: provider.headers,
         redirect: "follow"
@@ -1478,7 +1504,7 @@ app.all("/proxy", async (req, res) => {
     for (let redirects = 0; redirects <= 10; redirects++) {
       const requestHeaders = getForwardedHeaders(req, currentTarget, session, method);
 
-      upstream = await fetch(currentTarget, {
+      upstream = await fetchWithRetry(currentTarget, {
         method,
         redirect: "manual",
         signal: controller.signal,
@@ -1534,6 +1560,7 @@ app.all("/proxy", async (req, res) => {
       res.removeHeader("Content-Encoding");
       res.removeHeader("Content-Length");
       res.setHeader("Content-Type", "text/css; charset=utf-8");
+      res.setHeader("Cache-Control", upstream.headers.get("cache-control") || "public, max-age=300, stale-while-revalidate=600");
       return res.status(upstream.status).send(rewriteCss(css, currentTarget.href));
     }
 
@@ -1549,10 +1576,16 @@ app.all("/proxy", async (req, res) => {
       res.removeHeader("Content-Length");
       res.removeHeader("ETag");
       res.setHeader("Content-Type", upstream.headers.get("content-type") || "text/javascript; charset=utf-8");
+      res.setHeader("Cache-Control", upstream.headers.get("cache-control") || "public, max-age=300, stale-while-revalidate=600");
       return res.status(upstream.status).send(rewritten);
     }
 
     if (upstream.body) {
+      const upstreamCache = upstream.headers.get("cache-control");
+      res.setHeader(
+        "Cache-Control",
+        upstreamCache || "public, max-age=300, stale-while-revalidate=600"
+      );
       Readable.fromWeb(upstream.body).pipe(res);
       return;
     }
@@ -1575,4 +1608,8 @@ app.use((_req, res) => {
   });
 });
 
-app.listen(PORT, () => {});
+const server = app.listen(PORT, () => {});
+server.keepAliveTimeout = 65_000;
+server.headersTimeout = 66_000;
+server.requestTimeout = 0;
+server.on("error", (error) => console.error("VeilBrowse server error:", error));
