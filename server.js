@@ -81,7 +81,7 @@ function getSessionId(req, res) {
   }
 
   const id = crypto.randomBytes(24).toString("base64url");
-  sessions.set(id, { lastUsed: Date.now(), cookies: new Map() });
+  sessions.set(id, { lastUsed: Date.now(), cookies: new Map(), currentTarget: null });
 
   // Session cookie only. No Max-Age/Expires means the browser drops it when
   // the browser session ends.
@@ -1706,6 +1706,11 @@ app.all("/proxy", async (req, res) => {
       }
     }
 
+    if (session) {
+      session.currentTarget = currentTarget.href;
+      session.lastUsed = Date.now();
+    }
+
     copyResponseHeaders(upstream, res);
 
     const contentType = (upstream.headers.get("content-type") || "").toLowerCase();
@@ -1788,38 +1793,24 @@ app.all("/proxy", async (req, res) => {
 });
 
 app.use((req, res, next) => {
-  // Safety net for sites that navigate to a relative URL without using the
-  // rewritten anchor href. If the request came from a proxied document,
-  // reconstruct that destination against the document's original upstream URL
-  // instead of falling through to VeilBrowse's homepage.
+  // Resolve unknown browser navigations against the active upstream document.
   if (req.method !== "GET" && req.method !== "HEAD") return next();
 
-  const referer = typeof req.headers.referer === "string" ? req.headers.referer : "";
+  const cookieHeader = typeof req.headers.cookie === "string" ? req.headers.cookie : "";
+  const match = cookieHeader.match(/(?:^|;\s*)vb_sid=([^;]+)/);
+  const session = match?.[1] ? sessions.get(match[1]) : null;
+  const base = session?.currentTarget;
+
+  if (!base || req.path === "/" || req.path.startsWith("/proxy")) return next();
+
   try {
-    const ref = new URL(referer);
-    if (ref.pathname !== "/proxy") return next();
-
-    const original = ref.searchParams.get("url");
-    if (!original) return next();
-
-    const target = awaitSafeRelativeProxyTarget(original, req.originalUrl);
-    if (!target) return next();
-
-    return res.redirect("/proxy?url=" + encodeURIComponent(target));
+    const target = new URL(req.originalUrl, base);
+    if (!["http:", "https:"].includes(target.protocol)) return next();
+    return res.redirect("/proxy?url=" + encodeURIComponent(target.href));
   } catch {
     return next();
   }
 });
-
-function awaitSafeRelativeProxyTarget(originalUrl, requestPath) {
-  try {
-    const base = new URL(originalUrl);
-    if (!["http:", "https:"].includes(base.protocol)) return null;
-    return new URL(requestPath, base).href;
-  } catch {
-    return null;
-  }
-}
 
 app.use((_req, res) => {
   res.sendFile("index.html", {
