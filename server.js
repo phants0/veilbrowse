@@ -54,6 +54,9 @@ const BLOCKED_HEADERS = new Set([
 const PASS_RESPONSE_HEADERS = [
   "content-type",
   "content-language",
+  "etag",
+  "last-modified",
+  "vary",
   "accept-ranges",
   "content-range",
   "cross-origin-opener-policy",
