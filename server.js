@@ -431,6 +431,15 @@ function runtimeBridgeScript(targetUrl) {
       const raw = typeof input === "string" ? input : input?.url;
       if (!raw) return null;
 
+      // Keep URLs that the server already rewrote into VeilBrowse.
+      if (
+        raw.startsWith("/proxy?url=") ||
+        raw.startsWith("/proxy/") ||
+        raw.startsWith(location.origin + "/proxy?url=")
+      ) {
+        return raw.startsWith("/") ? location.origin + raw : raw;
+      }
+
       const absolute = new URL(raw, targetBase);
       if (!["http:", "https:"].includes(absolute.protocol)) return null;
 
