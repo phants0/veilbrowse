@@ -358,6 +358,11 @@ function rewriteJavaScript(source, baseUrl) {
     rewriteSpecifier
   );
 
+  rewritten = rewritten.replace(
+    /(\bnew\s+URL\(\s*)(["'])([^"']+)\2(\s*,\s*import\.meta\.url\s*\))/g,
+    rewriteSpecifier
+  );
+
   // Worker and worker-like module loading is another common source of
   // relative requests that otherwise bypass the proxy.
   rewritten = rewritten.replace(
