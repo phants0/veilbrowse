@@ -769,7 +769,7 @@ async function rewriteHtml(html, baseUrl) {
 
   $("head").prepend(
     runtimeBridgeScript(baseUrl) +
-    '<meta name="referrer" content="no-referrer"><meta name="robots" content="noindex,nofollow">'
+    '<meta name="referrer" content="strict-origin-when-cross-origin"><meta name="robots" content="noindex,nofollow">'
   );
 
   return $.html();
