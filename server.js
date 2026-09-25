@@ -348,25 +348,25 @@ function rewriteJavaScript(source, baseUrl) {
 
   // Static and dynamic ES module imports.
   rewritten = rewritten.replace(
-    /(\\bimport\\s*(?:\\(\\s*)?)(["'])([^"']+)\\2/g,
+    /(\bimport\s*(?:\(\s*)?)(["'])([^"']+)\2/g,
     rewriteSpecifier
   );
 
   // Re-exports such as: export { x } from "./module.js".
   rewritten = rewritten.replace(
-    /(\\bexport\\s+[^;\\n]*?\\sfrom\\s*)(["'])([^"']+)\\2/g,
+    /(\bexport\s+[^;\n]*?\sfrom\s*)(["'])([^"']+)\2/g,
     rewriteSpecifier
   );
 
   // Worker and worker-like module loading is another common source of
   // relative requests that otherwise bypass the proxy.
   rewritten = rewritten.replace(
-    /(\\bnew\\s+(?:Worker|SharedWorker)\\(\\s*)(["'])([^"']+)\\2/g,
+    /(\bnew\s+(?:Worker|SharedWorker)\(\s*)(["'])([^"']+)\2/g,
     rewriteSpecifier
   );
 
   rewritten = rewritten.replace(
-    /(\\bimportScripts\\(\\s*)(["'])([^"']+)\\2/g,
+    /(\bimportScripts\(\s*)(["'])([^"']+)\2/g,
     rewriteSpecifier
   );
 
