@@ -296,7 +296,12 @@ async function assertSafeTarget(rawUrl) {
 
 function proxyUrl(targetUrl, baseUrl) {
   try {
-    const absolute = new URL(targetUrl, baseUrl);
+    const raw = String(targetUrl || "").trim();
+    if (raw.startsWith("/proxy?url=") || raw.startsWith("/proxy/") || raw.startsWith("//veilbrowse.local/proxy?url=")) {
+      return raw;
+    }
+
+    const absolute = new URL(raw, baseUrl);
     if (!["http:", "https:"].includes(absolute.protocol)) return "#";
     return "/proxy?url=" + encodeURIComponent(absolute.href);
   } catch {
@@ -318,7 +323,8 @@ function rewriteSrcset(value, baseUrl) {
       if (
         url.startsWith("data:") ||
         url.startsWith("blob:") ||
-        url.startsWith("#")
+        url.startsWith("#") ||
+        url.startsWith("/proxy?url=")
       ) {
         return trimmed;
       }
@@ -806,7 +812,11 @@ function copyResponseHeaders(upstream, response) {
 
   response.setHeader("Referrer-Policy", "no-referrer");
   response.setHeader("X-Content-Type-Options", "nosniff");
-  response.setHeader("Cache-Control", "public, max-age=300, stale-while-revalidate=86400");
+  // HTML and other dynamic responses should not be made publicly cacheable by
+  // the proxy. Static assets get their own cache policy below.
+  if (!response.getHeader("Cache-Control")) {
+    response.setHeader("Cache-Control", "no-store, private, max-age=0");
+  }
 }
 
 function getForwardedHeaders(req, target, session, method) {
@@ -1583,10 +1593,20 @@ app.all("/proxy", async (req, res) => {
 
     if (upstream.body) {
       const upstreamCache = upstream.headers.get("cache-control");
-      res.setHeader(
-        "Cache-Control",
-        upstreamCache || "public, max-age=300, stale-while-revalidate=600"
+      const contentType = (upstream.headers.get("content-type") || "").toLowerCase();
+      const isImage = contentType.startsWith("image/");
+      const isFont = contentType.startsWith("font/") || /woff2?|ttf|otf/.test(contentType);
+      const isStaticBinary = isImage || isFont || contentType.includes("application/wasm");
+
+      // Images/thumbnails are deterministic URL-addressed assets and benefit
+      // heavily from browser caching. Keep dynamic documents out of this path.
+      const cachePolicy = upstreamCache || (
+        isStaticBinary
+          ? "public, max-age=86400, stale-while-revalidate=604800"
+          : "no-store, private, max-age=0"
       );
+
+      res.setHeader("Cache-Control", cachePolicy);
       Readable.fromWeb(upstream.body).pipe(res);
       return;
     }
