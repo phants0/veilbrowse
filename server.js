@@ -440,6 +440,14 @@ function runtimeBridgeScript(targetUrl) {
         return raw.startsWith("/") ? location.origin + raw : raw;
       }
 
+      // A bare root-relative path belongs to the upstream document, not
+      // VeilBrowse itself. Resolve it against the original page before
+      // creating the proxy URL.
+      if (raw.startsWith("/")) {
+        const absoluteRootPath = new URL(raw, targetBase).href;
+        return location.origin + "/proxy?url=" + encodeURIComponent(absoluteRootPath);
+      }
+
       const absolute = new URL(raw, targetBase);
       if (!["http:", "https:"].includes(absolute.protocol)) return null;
 
@@ -466,6 +474,19 @@ function runtimeBridgeScript(targetUrl) {
   };
 
   // Keep runtime-created navigations inside VeilBrowse.
+  const originalLocationAssign = window.location.assign.bind(window.location);
+  const originalLocationReplace = window.location.replace.bind(window.location);
+
+  const proxiedNavigation = (url) => {
+    const rewritten = proxy(url);
+    return rewritten || url;
+  };
+
+  try {
+    window.location.assign = (url) => originalLocationAssign(proxiedNavigation(url));
+    window.location.replace = (url) => originalLocationReplace(proxiedNavigation(url));
+  } catch {}
+
   const originalWindowOpen = window.open.bind(window);
   window.open = (url, target, features) => {
     const rewritten = proxy(url);
