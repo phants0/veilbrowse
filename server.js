@@ -595,7 +595,36 @@ async function rewriteHtml(html, baseUrl) {
 
     if (rel.includes("stylesheet") || rel.includes("manifest") || rel.includes("icon") || rel.includes("preload")) {
       $(element).attr("href", proxyUrl(href, baseUrl));
+
+      // CSS is rewritten by VeilBrowse, so an upstream SRI hash would no
+      // longer match the bytes the browser receives.
+      if (rel.includes("stylesheet")) {
+        $(element).removeAttr("integrity");
+      }
     }
+  });
+
+  // Modern sites commonly lazy-load resources through data-* attributes.
+  // Rewrite only URL-like values; leave application-specific data untouched.
+  const lazyUrlAttributes = [
+    "data-src",
+    "data-original",
+    "data-lazy-src",
+    "data-background-image",
+    "data-poster"
+  ];
+
+  for (const attribute of lazyUrlAttributes) {
+    $(`[${attribute}]`).each((_, element) => {
+      const value = $(element).attr(attribute);
+      if (!value || value.startsWith("data:") || value.startsWith("blob:")) return;
+      $(element).attr(attribute, proxyUrl(value, baseUrl));
+    });
+  }
+
+  $("[data-srcset]").each((_, element) => {
+    const value = $(element).attr("data-srcset");
+    if (value) $(element).attr("data-srcset", rewriteSrcset(value, baseUrl));
   });
 
   $("img[imagesrcset], link[imagesrcset]").each((_, element) => {
@@ -1380,7 +1409,16 @@ app.all("/proxy", async (req, res) => {
 
     if (contentType.includes("text/html")) {
       const html = await upstream.text();
-      const rewritten = await rewriteHtml(html, currentTarget.href);
+
+      let rewritten;
+      try {
+        rewritten = await rewriteHtml(html, currentTarget.href);
+      } catch {
+        // A malformed or unusually complex document should not turn into a
+        // proxy 502. Serve the original document rather than dropping the
+        // whole navigation.
+        rewritten = html;
+      }
 
       res.removeHeader("Content-Encoding");
       res.removeHeader("Content-Length");
