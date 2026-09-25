@@ -1706,14 +1706,18 @@ app.all("/proxy", async (req, res) => {
       }
     }
 
-    if (session) {
+    const contentType = (upstream.headers.get("content-type") || "").toLowerCase();
+
+    // Only the active HTML document should define the session's navigation
+    // base. Images, CSS, JS, fonts, and other assets can be requested after
+    // the page loads and must never replace the page URL used to resolve
+    // fallback navigations.
+    if (session && contentType.includes("text/html")) {
       session.currentTarget = currentTarget.href;
       session.lastUsed = Date.now();
     }
 
     copyResponseHeaders(upstream, res);
-
-    const contentType = (upstream.headers.get("content-type") || "").toLowerCase();
 
     if (contentType.includes("text/html")) {
       const html = await upstream.text();
