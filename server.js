@@ -758,8 +758,22 @@ async function rewriteHtml(html, baseUrl) {
       }
 
       $(element).attr(attribute, proxyUrl(value, baseUrl));
+
+      // Navigation must remain in the current VeilBrowse browsing context.
+      if (selector === "a" || selector === "area") {
+        $(element).removeAttr("target");
+      }
     });
   }
+
+  // Some sites put navigation URLs in attributes that are copied into links
+  // later. Normalize those links too before the document reaches the browser.
+  $("a[href], area[href]").each((_, element) => {
+    const href = $(element).attr("href");
+    if (!href || href.startsWith("#") || href.startsWith("javascript:")) return;
+    $(element).attr("href", proxyUrl(href, baseUrl));
+    $(element).removeAttr("target");
+  });
 
   $("[srcset]").each((_, element) => {
     const value = $(element).attr("srcset");
