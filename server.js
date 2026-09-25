@@ -506,9 +506,9 @@ function runtimeBridgeScript(targetUrl) {
     const rewritten = proxy(href);
     if (!rewritten) return;
 
-    const current = link.href;
-    if (current === rewritten || current === new URL(rewritten, location.href).href) return;
-
+    // The server rewrites normal links, but some sites replace href values
+    // during their own click handling. Always take control of ordinary
+    // navigation here so the browser cannot fall through to the upstream URL.
     event.preventDefault();
     event.stopImmediatePropagation();
 
@@ -891,7 +891,13 @@ async function rewriteHtml(html, baseUrl) {
 
   $("base").remove();
 
+  // The proxy owns the browser tab, so never let an upstream favicon become
+  // the tab identity. The homepage has its own local favicon and this keeps
+  // proxied pages from leaving the tab branded as the last visited site.
+  $('link[rel~="icon"], link[rel="shortcut icon"]').remove();
+
   $("head").prepend(
+    '<link rel="icon" href="' + proxyUrl("/favicon.svg", "http://veilbrowse.local/") + '">' +
     runtimeBridgeScript(baseUrl) +
     '<meta name="referrer" content="strict-origin-when-cross-origin"><meta name="robots" content="noindex,nofollow">'
   );
