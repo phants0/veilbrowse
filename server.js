@@ -55,7 +55,11 @@ const PASS_RESPONSE_HEADERS = [
   "content-type",
   "content-language",
   "accept-ranges",
-  "content-range"
+  "content-range",
+  "cross-origin-opener-policy",
+  "cross-origin-embedder-policy",
+  "cross-origin-resource-policy",
+  "origin-agent-cluster"
 ];
 
 const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
