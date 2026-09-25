@@ -482,6 +482,19 @@ function runtimeBridgeScript(targetUrl) {
   wrapSetter(window.HTMLEmbedElement?.prototype, "src");
   wrapSetter(window.HTMLTrackElement?.prototype, "src");
 
+  if (window.EventSource) {
+    const OriginalEventSource = window.EventSource;
+    window.EventSource = class extends OriginalEventSource {
+      constructor(url, config) {
+        const rewritten = proxy(url);
+        super(rewritten || url, config);
+      }
+    };
+    window.EventSource.CONNECTING = OriginalEventSource.CONNECTING;
+    window.EventSource.OPEN = OriginalEventSource.OPEN;
+    window.EventSource.CLOSED = OriginalEventSource.CLOSED;
+  }
+
   const searchStyle = document.createElement("style");
   searchStyle.textContent = [
     "#veilbrowse-search-toggle{position:fixed;top:14px;right:14px;z-index:2147483647;height:38px;padding:0 13px;border:1px solid #30343d;border-radius:10px;background:rgba(17,19,24,.94);color:#cbd0d8;font:600 13px/1 system-ui,-apple-system,BlinkMacSystemFont,sans-serif;cursor:pointer;box-shadow:0 8px 28px rgba(0,0,0,.24);backdrop-filter:blur(12px)}",
