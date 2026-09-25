@@ -813,12 +813,47 @@ function copyResponseHeaders(upstream, response) {
   response.removeHeader("Content-Length");
   response.removeHeader("Location");
 
-  response.setHeader("Referrer-Policy", "no-referrer");
+  // Keep the browser referrer available to the proxy. Some media CDNs,
+  // including Wikimedia's image infrastructure, use it when classifying
+  // browser image requests.
+  response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   response.setHeader("X-Content-Type-Options", "nosniff");
   // HTML and other dynamic responses should not be made publicly cacheable by
   // the proxy. Static assets get their own cache policy below.
   if (!response.getHeader("Cache-Control")) {
     response.setHeader("Cache-Control", "no-store, private, max-age=0");
+  }
+}
+
+function getOriginalReferer(req) {
+  const referer = typeof req.headers.referer === "string" ? req.headers.referer : "";
+  if (!referer) return "";
+
+  try {
+    const parsed = new URL(referer);
+
+    // When a proxied page requests a proxied image/resource, the browser's
+    // referrer points at VeilBrowse. Recover the actual upstream page so the
+    // destination CDN sees a normal browser-style referrer.
+    if (parsed.pathname === "/proxy") {
+      const original = parsed.searchParams.get("url");
+      if (original) {
+        const upstream = new URL(original);
+        if (["http:", "https:"].includes(upstream.protocol)) {
+          return upstream.href;
+        }
+      }
+      return "";
+    }
+
+    // Never leak an internal VeilBrowse URL upstream.
+    if (parsed.origin === "http://veilbrowse.local" || parsed.pathname.startsWith("/")) {
+      return "";
+    }
+
+    return parsed.href;
+  } catch {
+    return "";
   }
 }
 
@@ -850,7 +885,9 @@ function getForwardedHeaders(req, target, session, method) {
   if (cookie) headers.cookie = cookie;
 
   if (req.headers.origin) headers.origin = target.origin;
-  if (req.headers.referer) headers.referer = target.href;
+
+  const originalReferer = getOriginalReferer(req);
+  if (originalReferer) headers.referer = originalReferer;
 
   if (!["GET", "HEAD"].includes(method) && req.headers["content-type"]) {
     headers["content-type"] = req.headers["content-type"];
