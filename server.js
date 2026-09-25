@@ -1766,6 +1766,40 @@ app.all("/proxy", async (req, res) => {
   }
 });
 
+app.use((req, res, next) => {
+  // Safety net for sites that navigate to a relative URL without using the
+  // rewritten anchor href. If the request came from a proxied document,
+  // reconstruct that destination against the document's original upstream URL
+  // instead of falling through to VeilBrowse's homepage.
+  if (req.method !== "GET" && req.method !== "HEAD") return next();
+
+  const referer = typeof req.headers.referer === "string" ? req.headers.referer : "";
+  try {
+    const ref = new URL(referer);
+    if (ref.pathname !== "/proxy") return next();
+
+    const original = ref.searchParams.get("url");
+    if (!original) return next();
+
+    const target = awaitSafeRelativeProxyTarget(original, req.originalUrl);
+    if (!target) return next();
+
+    return res.redirect("/proxy?url=" + encodeURIComponent(target));
+  } catch {
+    return next();
+  }
+});
+
+function awaitSafeRelativeProxyTarget(originalUrl, requestPath) {
+  try {
+    const base = new URL(originalUrl);
+    if (!["http:", "https:"].includes(base.protocol)) return null;
+    return new URL(requestPath, base).href;
+  } catch {
+    return null;
+  }
+}
+
 app.use((_req, res) => {
   res.sendFile("index.html", {
     root: PUBLIC_DIR
