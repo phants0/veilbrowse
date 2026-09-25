@@ -806,7 +806,7 @@ function copyResponseHeaders(upstream, response) {
 
   response.setHeader("Referrer-Policy", "no-referrer");
   response.setHeader("X-Content-Type-Options", "nosniff");
-  response.setHeader("Cache-Control", "no-store, private, max-age=0");
+  response.setHeader("Cache-Control", "public, max-age=300, stale-while-revalidate=86400");
 }
 
 function getForwardedHeaders(req, target, session, method) {
@@ -824,7 +824,8 @@ function getForwardedHeaders(req, target, session, method) {
     "if-none-match",
     "if-modified-since",
     "if-range",
-    "accept"
+    "accept",
+    "accept-encoding"
   ];
 
   for (const name of forwardable) {
