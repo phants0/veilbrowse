@@ -456,6 +456,40 @@ function runtimeBridgeScript(targetUrl) {
     return originalFetch(rewritten, init);
   };
 
+  // Keep runtime-created navigations inside VeilBrowse.
+  const originalWindowOpen = window.open.bind(window);
+  window.open = (url, target, features) => {
+    const rewritten = proxy(url);
+    return originalWindowOpen(rewritten || url, target, features);
+  };
+
+  document.addEventListener("click", (event) => {
+    if (event.defaultPrevented || event.button !== 0) return;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+    const link = event.target?.closest?.("a[href], area[href]");
+    if (!link) return;
+
+    const href = link.getAttribute("href");
+    if (!href || href.startsWith("#") || href.startsWith("javascript:")) return;
+
+    const rewritten = proxy(href);
+    if (!rewritten) return;
+
+    const current = link.href;
+    if (current === rewritten || current === new URL(rewritten, location.href).href) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    const target = link.getAttribute("target");
+    if (target === "_blank") {
+      originalWindowOpen(rewritten, "_blank", "noopener");
+    } else {
+      window.location.assign(rewritten);
+    }
+  }, true);
+
   const originalOpen = XMLHttpRequest.prototype.open;
   XMLHttpRequest.prototype.open = function(method, url, ...rest) {
     const rewritten = proxy(url);
