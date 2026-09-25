@@ -873,7 +873,8 @@ function getForwardedHeaders(req, target, session, method) {
     "if-none-match",
     "if-modified-since",
     "if-range",
-    "accept"
+    "accept",
+    "service-worker"
   ];
 
   for (const name of forwardable) {
