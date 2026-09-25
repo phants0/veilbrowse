@@ -324,6 +324,55 @@ function rewriteSrcset(value, baseUrl) {
     .join(", ");
 }
 
+function rewriteJavaScript(source, baseUrl) {
+  let rewritten = String(source);
+
+  const rewriteSpecifier = (match, prefix, quote, specifier, suffix = "") => {
+    if (
+      !specifier ||
+      specifier.startsWith("data:") ||
+      specifier.startsWith("blob:") ||
+      specifier.startsWith("http://") ||
+      specifier.startsWith("https://") ||
+      specifier.startsWith("//")
+    ) {
+      return match;
+    }
+
+    if (!(specifier.startsWith("/") || specifier.startsWith("./") || specifier.startsWith("../"))) {
+      return match;
+    }
+
+    return prefix + quote + proxyUrl(specifier, baseUrl) + quote + suffix;
+  };
+
+  // Static and dynamic ES module imports.
+  rewritten = rewritten.replace(
+    /(\\bimport\\s*(?:\\(\\s*)?)(["'])([^"']+)\\2/g,
+    rewriteSpecifier
+  );
+
+  // Re-exports such as: export { x } from "./module.js".
+  rewritten = rewritten.replace(
+    /(\\bexport\\s+[^;\\n]*?\\sfrom\\s*)(["'])([^"']+)\\2/g,
+    rewriteSpecifier
+  );
+
+  // Worker and worker-like module loading is another common source of
+  // relative requests that otherwise bypass the proxy.
+  rewritten = rewritten.replace(
+    /(\\bnew\\s+(?:Worker|SharedWorker)\\(\\s*)(["'])([^"']+)\\2/g,
+    rewriteSpecifier
+  );
+
+  rewritten = rewritten.replace(
+    /(\\bimportScripts\\(\\s*)(["'])([^"']+)\\2/g,
+    rewriteSpecifier
+  );
+
+  return rewritten;
+}
+
 function rewriteCss(css, baseUrl) {
   let rewritten = css.replace(
     /url\(\s*(['"]?)(.*?)\1\s*\)/gi,
@@ -544,7 +593,10 @@ async function rewriteHtml(html, baseUrl) {
     ["object", "data"],
     ["form", "action"],
     ["input", "src"],
-    ["track", "src"]
+    ["track", "src"],
+    ["svg", "href"],
+    ["use", "href"],
+    ["use", "xlink:href"]
   ];
 
   for (const [selector, attribute] of urlAttributes) {
@@ -640,6 +692,10 @@ async function rewriteHtml(html, baseUrl) {
   $("[style]").each((_, element) => {
     const value = $(element).attr("style");
     if (value) $(element).attr("style", rewriteCss(value, baseUrl));
+  });
+
+  $("script[src]").each((_, element) => {
+    $(element).removeAttr("integrity");
   });
 
   $("style").each((_, element) => {
@@ -1433,6 +1489,21 @@ app.all("/proxy", async (req, res) => {
       res.removeHeader("Content-Length");
       res.setHeader("Content-Type", "text/css; charset=utf-8");
       return res.status(upstream.status).send(rewriteCss(css, currentTarget.href));
+    }
+
+    const isJavaScript =
+      contentType.includes("javascript") ||
+      contentType.includes("ecmascript");
+
+    if (isJavaScript) {
+      const source = await upstream.text();
+      const rewritten = rewriteJavaScript(source, currentTarget.href);
+
+      res.removeHeader("Content-Encoding");
+      res.removeHeader("Content-Length");
+      res.removeHeader("ETag");
+      res.setHeader("Content-Type", upstream.headers.get("content-type") || "text/javascript; charset=utf-8");
+      return res.status(upstream.status).send(rewritten);
     }
 
     if (upstream.body) {
