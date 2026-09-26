@@ -493,13 +493,19 @@ function runtimeBridgeScript(targetUrl) {
     return originalWindowOpen(rewritten || url, target, features);
   };
 
+  const findNavigationLink = (event) => {
+    const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+    for (const node of path) {
+      if (node?.nodeType === 1 && node.matches?.("a[href], area[href]")) return node;
+    }
+    return event.target?.closest?.("a[href], area[href]") || null;
+  };
+
   document.addEventListener("click", (event) => {
-    // Do not skip already-cancelled clicks. A site's window/document capture
-    // handler can cancel the event before this document-level handler runs.
     if (event.button !== 0) return;
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
 
-    const link = event.target?.closest?.("a[href], area[href]");
+    const link = findNavigationLink(event);
     if (!link) return;
 
     const href = link.getAttribute("href");
@@ -508,30 +514,32 @@ function runtimeBridgeScript(targetUrl) {
     const rewritten = proxy(href);
     if (!rewritten) return;
 
-    // The server rewrites normal links, but some sites replace href values
-    // during their own click handling. Always take control of ordinary
-    // navigation here so the browser cannot fall through to the upstream URL.
     event.preventDefault();
     event.stopImmediatePropagation();
 
     const target = link.getAttribute("target");
     if (target === "_blank") {
       originalWindowOpen(rewritten, "_blank", "noopener");
-    } else {
-      // Use the browser's real navigation property. Location.assign can be
-      // non-overridable in modern browsers, so wrapping it is unreliable.
-      window.location.href = rewritten;
+      return;
     }
+
+    try {
+      if (window.navigation?.navigate) {
+        window.navigation.navigate(rewritten);
+        return;
+      }
+    } catch {}
+
+    window.location.href = rewritten;
   }, true);
 
-  // Final navigation safety net. This catches navigations that never
-  // reach the click handler, including links created by site scripts and
-  // form/location-driven navigations. Modern Chromium exposes the Navigation
-  // API, while the click handler above remains the fallback for older browsers.
+  // Cross-origin upstream destinations have canIntercept=false, but
+  // preventDefault() can still cancel most navigation types. Redirect those
+  // navigations to their VeilBrowse URL before the browser leaves the proxy.
   if (window.navigation?.addEventListener) {
     window.navigation.addEventListener("navigate", (event) => {
       try {
-        if (!event.canIntercept || event.hashChange || event.downloadRequest) return;
+        if (event.hashChange || event.downloadRequest) return;
 
         const destination = event.destination?.url || "";
         const currentOrigin = location.origin;
@@ -541,6 +549,14 @@ function runtimeBridgeScript(targetUrl) {
         if (!rewritten || rewritten === destination) return;
 
         event.preventDefault();
+
+        try {
+          if (window.navigation?.navigate) {
+            window.navigation.navigate(rewritten);
+            return;
+          }
+        } catch {}
+
         window.location.href = rewritten;
       } catch {}
     });
