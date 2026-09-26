@@ -494,7 +494,9 @@ function runtimeBridgeScript(targetUrl) {
   };
 
   document.addEventListener("click", (event) => {
-    if (event.defaultPrevented || event.button !== 0) return;
+    // Do not skip already-cancelled clicks. A site's window/document capture
+    // handler can cancel the event before this document-level handler runs.
+    if (event.button !== 0) return;
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
 
     const link = event.target?.closest?.("a[href], area[href]");
@@ -521,6 +523,28 @@ function runtimeBridgeScript(targetUrl) {
       window.location.href = rewritten;
     }
   }, true);
+
+  // Final navigation safety net. This catches navigations that never
+  // reach the click handler, including links created by site scripts and
+  // form/location-driven navigations. Modern Chromium exposes the Navigation
+  // API, while the click handler above remains the fallback for older browsers.
+  if (window.navigation?.addEventListener) {
+    window.navigation.addEventListener("navigate", (event) => {
+      try {
+        if (!event.canIntercept || event.hashChange || event.downloadRequest) return;
+
+        const destination = event.destination?.url || "";
+        const currentOrigin = location.origin;
+        if (!destination || destination.startsWith(currentOrigin + "/proxy?url=")) return;
+
+        const rewritten = proxy(destination);
+        if (!rewritten || rewritten === destination) return;
+
+        event.preventDefault();
+        window.location.href = rewritten;
+      } catch {}
+    });
+  }
 
   const originalOpen = XMLHttpRequest.prototype.open;
   XMLHttpRequest.prototype.open = function(method, url, ...rest) {
