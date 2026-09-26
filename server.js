@@ -501,7 +501,7 @@ function runtimeBridgeScript(targetUrl) {
     return event.target?.closest?.("a[href], area[href]") || null;
   };
 
-  document.addEventListener("click", (event) => {
+  window.addEventListener("click", (event) => {
     if (event.button !== 0) return;
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
 
