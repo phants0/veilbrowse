@@ -516,7 +516,9 @@ function runtimeBridgeScript(targetUrl) {
     if (target === "_blank") {
       originalWindowOpen(rewritten, "_blank", "noopener");
     } else {
-      window.location.assign(rewritten);
+      // Use the browser's real navigation property. Location.assign can be
+      // non-overridable in modern browsers, so wrapping it is unreliable.
+      window.location.href = rewritten;
     }
   }, true);
 
@@ -705,7 +707,7 @@ function runtimeBridgeScript(targetUrl) {
         destination = "/search?q=" + encodeURIComponent(value);
       }
 
-      window.location.assign(destination);
+      window.location.href = destination;
     };
 
     toggle.addEventListener("click", openSearch);
@@ -897,7 +899,7 @@ async function rewriteHtml(html, baseUrl) {
   $('link[rel~="icon"], link[rel="shortcut icon"]').remove();
 
   $("head").prepend(
-    '<link rel="icon" href="' + proxyUrl("/favicon.svg", "http://veilbrowse.local/") + '">' +
+    '<link rel="icon" href="/favicon.svg">' +
     runtimeBridgeScript(baseUrl) +
     '<meta name="referrer" content="strict-origin-when-cross-origin"><meta name="robots" content="noindex,nofollow">'
   );
