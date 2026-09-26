@@ -523,44 +523,16 @@ function runtimeBridgeScript(targetUrl) {
       return;
     }
 
-    try {
-      if (window.navigation?.navigate) {
-        window.navigation.navigate(rewritten);
-        return;
-      }
-    } catch {}
-
-    window.location.href = rewritten;
+    // The server has already converted this into a same-origin VeilBrowse
+    // URL. Use the browser's normal navigation path rather than the
+    // Navigation API, whose async navigation promise can fail without
+    // reaching the old fallback.
+    window.location.assign(rewritten);
   }, true);
 
-  // Cross-origin upstream destinations have canIntercept=false, but
-  // preventDefault() can still cancel most navigation types. Redirect those
-  // navigations to their VeilBrowse URL before the browser leaves the proxy.
-  if (window.navigation?.addEventListener) {
-    window.navigation.addEventListener("navigate", (event) => {
-      try {
-        if (event.hashChange || event.downloadRequest) return;
-
-        const destination = event.destination?.url || "";
-        const currentOrigin = location.origin;
-        if (!destination || destination.startsWith(currentOrigin + "/proxy?url=")) return;
-
-        const rewritten = proxy(destination);
-        if (!rewritten || rewritten === destination) return;
-
-        event.preventDefault();
-
-        try {
-          if (window.navigation?.navigate) {
-            window.navigation.navigate(rewritten);
-            return;
-          }
-        } catch {}
-
-        window.location.href = rewritten;
-      } catch {}
-    });
-  }
+  // Do not try to rewrite cross-origin Navigation API events. VeilBrowse
+  // rewrites normal anchors before they reach the browser, and the Navigation
+  // API cannot intercept cross-origin destinations anyway.
 
   const originalOpen = XMLHttpRequest.prototype.open;
   XMLHttpRequest.prototype.open = function(method, url, ...rest) {
