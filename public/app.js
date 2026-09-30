@@ -55,7 +55,7 @@ function normalizeUrl(value) {
 
 
 // Use Alt-based shortcuts because browsers reserve Ctrl+K and Ctrl+Shift+J.
-document.addEventListener("keydown", (event) => {
+window.addEventListener("keydown", (event) => {
   const key = (event.key || "").toLowerCase();
   if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && (key === "k" || event.code === "KeyK")) {
     event.preventDefault();
