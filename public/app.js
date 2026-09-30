@@ -54,16 +54,15 @@ function normalizeUrl(value) {
 }
 
 
-// Global shortcuts work even when focus is in another control.
+// Use Alt-based shortcuts because browsers reserve Ctrl+K and Ctrl+Shift+J.
 document.addEventListener("keydown", (event) => {
   const key = (event.key || "").toLowerCase();
-  const modifier = event.ctrlKey || event.metaKey;
-  if (modifier && !event.altKey && !event.shiftKey && (key === "k" || event.code === "KeyK")) {
+  if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && (key === "k" || event.code === "KeyK")) {
     event.preventDefault();
     event.stopImmediatePropagation();
     input?.focus();
     input?.select();
-  } else if (modifier && event.shiftKey && !event.altKey && (key === "j" || event.code === "KeyJ")) {
+  } else if (event.altKey && event.shiftKey && !event.ctrlKey && !event.metaKey && !event.repeat && (key === "c" || event.code === "KeyC")) {
     event.preventDefault();
     event.stopImmediatePropagation();
     toggleHomeConsole();
@@ -88,7 +87,7 @@ function installHomeConsole() {
   homeConsoleButton = document.createElement("button");
   homeConsoleButton.type = "button";
   homeConsoleButton.textContent = "Console";
-  homeConsoleButton.title = "Open error console (Ctrl+Shift+J / ⌘+Shift+J)";
+  homeConsoleButton.title = "Open error console (Alt+Shift+C)";
   homeConsoleButton.style.cssText = "position:fixed;right:14px;bottom:14px;z-index:1000;border:1px solid #454b56;border-radius:9px;padding:8px 12px;background:#111318;color:#e6e8ec;font:600 12px system-ui;cursor:pointer";
   homeConsolePanel = document.createElement("section");
   homeConsolePanel.id = "veilbrowse-home-console";
