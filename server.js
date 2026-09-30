@@ -805,12 +805,14 @@ function runtimeBridgeScript(targetUrl) {
   closeErrors.addEventListener("click", () => { errorPanel.hidden = true; });
   clearErrors.addEventListener("click", () => { errorEntries.length = 0; renderErrors(); });
   document.addEventListener("keydown", (event) => {
-    if ((event.ctrlKey || event.metaKey) && event.shiftKey && !event.altKey && ((event.key || "").toLowerCase() === "j" || event.code === "KeyJ")) {
+    const key = (event.key || "").toLowerCase();
+    if (event.altKey && event.shiftKey && !event.ctrlKey && !event.metaKey && !event.repeat && (key === "c" || event.code === "KeyC")) {
       event.preventDefault();
-      event.stopPropagation();
+      event.stopImmediatePropagation();
       errorPanel.hidden = !errorPanel.hidden;
       if (!errorPanel.hidden) renderErrors();
     } else if (event.key === "Escape" && !errorPanel.hidden) {
+      event.preventDefault();
       errorPanel.hidden = true;
     }
   }, true);
@@ -1607,7 +1609,7 @@ app.get("/search", async (req, res) => {
 '</div></div></header>' +
 '<main><div class="meta">Search results for <strong>' + escapeHtml(query) + '</strong> <span class="provider">• Powered by ' + escapeHtml(providerName) + '</span></div>' +
 cards +
-'</main><script>(function(){const shell=document.getElementById("searchShell");const button=document.getElementById("collapseSearch");const form=shell?.querySelector("form");if(!shell||!button)return;button.addEventListener("click",function(){const collapsed=shell.classList.toggle("collapsed");button.setAttribute("aria-expanded",String(!collapsed));button.setAttribute("aria-label",collapsed?"Show search bar":"Hide search bar");button.textContent=collapsed?"Show":"Hide";if(!collapsed)form?.querySelector("input")?.focus();});})();</script></body></html>';
+'</main><script>(function(){const shell=document.getElementById("searchShell");const button=document.getElementById("collapseSearch");const form=shell?.querySelector("form");const input=form?.querySelector("input");if(!shell||!button)return;const toggle=function(){const collapsed=shell.classList.toggle("collapsed");button.setAttribute("aria-expanded",String(!collapsed));button.setAttribute("aria-label",collapsed?"Show search bar":"Hide search bar");button.textContent=collapsed?"Show":"Hide";if(!collapsed)input?.focus();};button.addEventListener("click",toggle);document.addEventListener("keydown",function(event){const key=(event.key||"").toLowerCase();if(event.altKey&&!event.ctrlKey&&!event.metaKey&&!event.shiftKey&&!event.repeat&&(key==="k"||event.code==="KeyK")){event.preventDefault();event.stopImmediatePropagation();if(shell.classList.contains("collapsed"))toggle();else input?.focus();}else if(event.key==="Escape"&&!shell.classList.contains("collapsed")){event.preventDefault();toggle();}},true);})();</script></body></html>';
   }
 
   let lastError = null;
