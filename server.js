@@ -727,11 +727,12 @@ function runtimeBridgeScript(targetUrl) {
       if (event.target === overlay) closeSearch();    });
     box.addEventListener("submit", submitSearch);
 
-    document.addEventListener("keydown", (event) => {
+    const handleShortcut = (event) => {
       const modifier = event.ctrlKey || event.metaKey;
-      if (modifier && event.key.toLowerCase() === "k") {
+      const key = (event.key || "").toLowerCase();
+      if (modifier && !event.altKey && !event.shiftKey && (key === "k" || event.code === "KeyK")) {
         event.preventDefault();
-        event.stopPropagation();
+        event.stopImmediatePropagation();
         openSearch();
         return;
       }
@@ -740,7 +741,9 @@ function runtimeBridgeScript(targetUrl) {
         event.preventDefault();
         closeSearch();
       }
-    }, true);
+    };
+    window.addEventListener("keydown", handleShortcut, true);
+    document.addEventListener("keydown", handleShortcut, true);
   };
 
   if (document.readyState === "loading") {
