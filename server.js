@@ -804,7 +804,7 @@ function runtimeBridgeScript(targetUrl) {
   errorButton.addEventListener("click", () => { errorPanel.hidden = !errorPanel.hidden; if (!errorPanel.hidden) renderErrors(); });
   closeErrors.addEventListener("click", () => { errorPanel.hidden = true; });
   clearErrors.addEventListener("click", () => { errorEntries.length = 0; renderErrors(); });
-  document.addEventListener("keydown", (event) => {
+  window.addEventListener("keydown", (event) => {
     const key = (event.key || "").toLowerCase();
     if (event.altKey && event.shiftKey && !event.ctrlKey && !event.metaKey && !event.repeat && (key === "c" || event.code === "KeyC")) {
       event.preventDefault();
