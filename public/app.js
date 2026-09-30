@@ -54,13 +54,86 @@ function normalizeUrl(value) {
 }
 
 
+// Global shortcuts work even when focus is in another control.
 document.addEventListener("keydown", (event) => {
-  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "k") {
+  const key = (event.key || "").toLowerCase();
+  const modifier = event.ctrlKey || event.metaKey;
+  if (modifier && !event.altKey && !event.shiftKey && (key === "k" || event.code === "KeyK")) {
     event.preventDefault();
+    event.stopImmediatePropagation();
     input?.focus();
     input?.select();
+  } else if (modifier && event.shiftKey && !event.altKey && (key === "j" || event.code === "KeyJ")) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    toggleHomeConsole();
   }
 }, true);
+
+// Page-local diagnostics: never transmitted to the server or persisted.
+const homeErrors = [];
+let homeConsolePanel;
+let homeConsoleOutput;
+let homeConsoleButton;
+function toggleHomeConsole() {
+  if (!homeConsolePanel) return;
+  homeConsolePanel.hidden = !homeConsolePanel.hidden;
+  if (!homeConsolePanel.hidden) homeConsoleOutput.scrollTop = homeConsoleOutput.scrollHeight;
+}
+function installHomeConsole() {
+  if (homeConsolePanel) return;
+  const style = document.createElement("style");
+  style.textContent = "#veilbrowse-home-console[hidden]{display:none!important}";
+  document.head.appendChild(style);
+  homeConsoleButton = document.createElement("button");
+  homeConsoleButton.type = "button";
+  homeConsoleButton.textContent = "Console";
+  homeConsoleButton.title = "Open error console (Ctrl+Shift+J / ⌘+Shift+J)";
+  homeConsoleButton.style.cssText = "position:fixed;right:14px;bottom:14px;z-index:1000;border:1px solid #454b56;border-radius:9px;padding:8px 12px;background:#111318;color:#e6e8ec;font:600 12px system-ui;cursor:pointer";
+  homeConsolePanel = document.createElement("section");
+  homeConsolePanel.id = "veilbrowse-home-console";
+  homeConsolePanel.hidden = true;
+  homeConsolePanel.setAttribute("role","dialog");
+  homeConsolePanel.setAttribute("aria-label","VeilBrowse error console");
+  homeConsolePanel.style.cssText = "position:fixed;right:14px;bottom:58px;z-index:1000;width:min(680px,calc(100vw - 28px));height:min(360px,55vh);display:flex;flex-direction:column;border:1px solid #454b56;border-radius:12px;background:#0b0d11;color:#e6e8ec;box-shadow:0 18px 60px #0009;font:12px/1.5 ui-monospace,monospace";
+  const header = document.createElement("div");
+  header.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-bottom:1px solid #30343d;font:600 12px system-ui";
+  const title = document.createElement("span");
+  title.textContent = "VeilBrowse Console";
+  const actions = document.createElement("div");
+  actions.style.cssText = "display:flex;gap:8px";
+  const clear = document.createElement("button");
+  clear.type = "button"; clear.textContent = "Clear";
+  const close = document.createElement("button");
+  close.type = "button"; close.textContent = "Close";
+  for (const button of [clear,close]) button.style.cssText = "border:1px solid #454b56;border-radius:6px;padding:4px 8px;background:#171a20;color:#e6e8ec;font:600 11px system-ui;cursor:pointer";
+  homeConsoleOutput = document.createElement("pre");
+  homeConsoleOutput.style.cssText = "flex:1;overflow:auto;margin:0;padding:10px 12px;white-space:pre-wrap;overflow-wrap:anywhere;color:#ff9da6";
+  const render = () => {
+    homeConsoleOutput.textContent = homeErrors.length ? homeErrors.join("\\n\\n") : "No errors captured yet. JavaScript errors and rejected promises will appear here.";
+    homeConsoleButton.textContent = homeErrors.length ? "Console (" + homeErrors.length + ")" : "Console";
+    homeConsoleOutput.scrollTop = homeConsoleOutput.scrollHeight;
+  };
+  const log = (detail) => {
+    homeErrors.push(new Date().toLocaleTimeString() + "  " + String(detail || "Unknown error").slice(0,4000));
+    if (homeErrors.length > 100) homeErrors.shift();
+    render();
+  };
+  clear.addEventListener("click", () => { homeErrors.length = 0; render(); });
+  close.addEventListener("click", () => { homeConsolePanel.hidden = true; });
+  homeConsoleButton.addEventListener("click", toggleHomeConsole);
+  actions.append(clear,close); header.append(title,actions); homeConsolePanel.append(header,homeConsoleOutput);
+  document.body.append(homeConsolePanel,homeConsoleButton);
+  window.addEventListener("error", (event) => {
+    if (event.error?.stack) log(event.error.stack);
+    else if (event.message) log(event.message + (event.filename ? "\\n" + event.filename + ":" + event.lineno + ":" + event.colno : ""));
+  });
+  window.addEventListener("unhandledrejection", (event) => log(event.reason?.stack || event.reason?.message || String(event.reason)));
+  const originalError = console.error.bind(console);
+  console.error = (...args) => { log(args.map((v) => { try { return typeof v === "string" ? v : JSON.stringify(v) ?? String(v); } catch { return String(v); } }).join(" ")); originalError(...args); };
+  render();
+}
+installHomeConsole();
 
 form?.addEventListener("submit", (event) => {
   event.preventDefault();
