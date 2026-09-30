@@ -655,7 +655,7 @@ function runtimeBridgeScript(targetUrl) {
     toggle.id = "veilbrowse-search-toggle";
     toggle.type = "button";
     toggle.textContent = "Search";
-    toggle.title = "Open VeilBrowse search (Ctrl+K / ⌘K)";
+    toggle.title = "Open VeilBrowse search (Alt+K)";
     toggle.setAttribute("aria-label", "Open VeilBrowse search");
 
     const overlay = document.createElement("div");
@@ -728,9 +728,8 @@ function runtimeBridgeScript(targetUrl) {
     box.addEventListener("submit", submitSearch);
 
     const handleShortcut = (event) => {
-      const modifier = event.ctrlKey || event.metaKey;
       const key = (event.key || "").toLowerCase();
-      if (modifier && !event.altKey && !event.shiftKey && (key === "k" || event.code === "KeyK")) {
+      if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && (key === "k" || event.code === "KeyK")) {
         event.preventDefault();
         event.stopImmediatePropagation();
         openSearch();
@@ -759,7 +758,7 @@ function runtimeBridgeScript(targetUrl) {
   const errorButton = document.createElement("button");
   errorButton.type = "button";
   errorButton.textContent = "Console";
-  errorButton.title = "Open error console (Ctrl+Shift+J / ⌘+Shift+J)";
+  errorButton.title = "Open error console (Alt+Shift+C)";
   errorButton.setAttribute("aria-label", "Open error console");
   errorButton.style.cssText = "position:fixed;right:14px;bottom:14px;z-index:2147483647;border:1px solid #454b56;border-radius:9px;padding:8px 12px;background:#111318;color:#e6e8ec;font:600 12px system-ui;cursor:pointer;box-shadow:0 6px 24px #0005";
   const errorPanel = document.createElement("section");
