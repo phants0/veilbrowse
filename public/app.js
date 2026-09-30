@@ -53,6 +53,15 @@ function normalizeUrl(value) {
   }
 }
 
+
+document.addEventListener("keydown", (event) => {
+  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "k") {
+    event.preventDefault();
+    input?.focus();
+    input?.select();
+  }
+}, true);
+
 form?.addEventListener("submit", (event) => {
   event.preventDefault();
   const value = input.value.trim();
