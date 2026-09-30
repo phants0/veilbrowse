@@ -903,7 +903,10 @@ async function rewriteHtml(html, baseUrl) {
     }
   });
 
+  // Upstream <base> elements can make rewritten /proxy links resolve against
+  // the original website. Replace them with a VeilBrowse-root base instead.
   $("base").remove();
+  $("head").prepend('<base href="/">');
 
   // The proxy owns the browser tab, so never let an upstream favicon become
   // the tab identity. The homepage has its own local favicon and this keeps
@@ -1746,10 +1749,9 @@ app.all("/proxy", async (req, res) => {
       try {
         rewritten = await rewriteHtml(html, currentTarget.href);
       } catch {
-        // A malformed or unusually complex document should not turn into a
-        // proxy 502. Serve the original document rather than dropping the
-        // whole navigation.
-        rewritten = html;
+        // Never serve upstream HTML unmodified: its links could navigate
+        // outside VeilBrowse and bypass the proxy.
+        return res.status(502).send("Unable to rewrite the website for VeilBrowse.");
       }
 
       res.removeHeader("Content-Encoding");
