@@ -760,6 +760,10 @@ function runtimeBridgeScript(targetUrl) {
   errorButton.setAttribute("aria-label", "Open error console");
   errorButton.style.cssText = "position:fixed;right:14px;bottom:14px;z-index:2147483647;border:1px solid #454b56;border-radius:9px;padding:8px 12px;background:#111318;color:#e6e8ec;font:600 12px system-ui;cursor:pointer;box-shadow:0 6px 24px #0005";
   const errorPanel = document.createElement("section");
+  errorPanel.id = "veilbrowse-error-console";
+  const errorStyle = document.createElement("style");
+  errorStyle.textContent = "#veilbrowse-error-console[hidden]{display:none!important}";
+  document.head.appendChild(errorStyle);
   errorPanel.hidden = true;
   errorPanel.setAttribute("role", "dialog");
   errorPanel.setAttribute("aria-label", "VeilBrowse error console");
