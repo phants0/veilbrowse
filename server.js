@@ -1748,10 +1748,17 @@ app.all("/proxy", async (req, res) => {
       let rewritten;
       try {
         rewritten = await rewriteHtml(html, currentTarget.href);
-      } catch {
-        // Never serve upstream HTML unmodified: its links could navigate
-        // outside VeilBrowse and bypass the proxy.
-        return res.status(502).send("Unable to rewrite the website for VeilBrowse.");
+      } catch (error) {
+        // Keep the page usable if the full HTML parser fails. Rewrite ordinary
+        // anchor URLs with a small fallback, and log only the error (not URLs).
+        console.error("VeilBrowse HTML rewrite failed:", error?.message || error);
+        rewritten = html
+          .replace(/<base\\b[^>]*>/gi, "")
+          .replace(/(<(?:a|area)\\b[^>]*?\\bhref\\s*=\\s*)(["'])(.*?)\\2/gi, (match, prefix, quote, value) => {
+            const trimmed = value.trim();
+            if (!trimmed || /^(#|javascript:|data:|blob:)/i.test(trimmed)) return match;
+            return prefix + quote + proxyUrl(trimmed, currentTarget.href) + quote;
+          });
       }
 
       res.removeHeader("Content-Encoding");
