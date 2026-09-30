@@ -1753,12 +1753,22 @@ app.all("/proxy", async (req, res) => {
         // anchor URLs with a small fallback, and log only the error (not URLs).
         console.error("VeilBrowse HTML rewrite failed:", error?.message || error);
         rewritten = html
-          .replace(/<base\\b[^>]*>/gi, "")
-          .replace(/(<(?:a|area)\\b[^>]*?\\bhref\\s*=\\s*)(["'])(.*?)\\2/gi, (match, prefix, quote, value) => {
+          .replace(/<base\b[^>]*>/gi, "")
+          .replace(/(<(?:a|area)\b[^>]*?\bhref\s*=\s*)(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi, (match, prefix, doubleQuoted, singleQuoted, unquoted) => {
+            const value = doubleQuoted ?? singleQuoted ?? unquoted ?? "";
             const trimmed = value.trim();
             if (!trimmed || /^(#|javascript:|data:|blob:)/i.test(trimmed)) return match;
+            const quote = doubleQuoted !== undefined ? '"' : singleQuoted !== undefined ? "'" : "";
             return prefix + quote + proxyUrl(trimmed, currentTarget.href) + quote;
           });
+        const bridge = runtimeBridgeScript(currentTarget.href);
+        if (/<head\b[^>]*>/i.test(rewritten)) {
+          rewritten = rewritten.replace(/<head\b([^>]*)>/i, (match) => match + '<base href="/">' + bridge);
+        } else if (/<html\b[^>]*>/i.test(rewritten)) {
+          rewritten = rewritten.replace(/<html\b[^>]*>/i, (match) => match + '<head><base href="/">' + bridge + '</head>');
+        } else {
+          rewritten = '<head><base href="/">' + bridge + '</head>' + rewritten;
+        }
       }
 
       res.removeHeader("Content-Encoding");
