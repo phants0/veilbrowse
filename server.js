@@ -749,6 +749,79 @@ function runtimeBridgeScript(targetUrl) {
     createSearchUi();
   }
 
+
+  // Lightweight, page-local error console. Entries stay in this document and
+  // are never sent to the VeilBrowse server or persisted.
+  const errorEntries = [];
+  const errorButton = document.createElement("button");
+  errorButton.type = "button";
+  errorButton.textContent = "Console";
+  errorButton.title = "Open error console (Ctrl+Shift+J / ⌘+Shift+J)";
+  errorButton.setAttribute("aria-label", "Open error console");
+  errorButton.style.cssText = "position:fixed;right:14px;bottom:14px;z-index:2147483647;border:1px solid #454b56;border-radius:9px;padding:8px 12px;background:#111318;color:#e6e8ec;font:600 12px system-ui;cursor:pointer;box-shadow:0 6px 24px #0005";
+  const errorPanel = document.createElement("section");
+  errorPanel.hidden = true;
+  errorPanel.setAttribute("role", "dialog");
+  errorPanel.setAttribute("aria-label", "VeilBrowse error console");
+  errorPanel.style.cssText = "position:fixed;right:14px;bottom:58px;z-index:2147483647;width:min(680px,calc(100vw - 28px));height:min(360px,55vh);display:flex;flex-direction:column;border:1px solid #454b56;border-radius:12px;background:#0b0d11;color:#e6e8ec;box-shadow:0 18px 60px #0009;font:12px/1.5 ui-monospace,monospace";
+  const errorHeader = document.createElement("div");
+  errorHeader.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-bottom:1px solid #30343d;font:600 12px system-ui";
+  const errorTitle = document.createElement("span");
+  errorTitle.textContent = "VeilBrowse Console";
+  const errorActions = document.createElement("div");
+  errorActions.style.cssText = "display:flex;gap:8px";
+  const clearErrors = document.createElement("button");
+  clearErrors.type = "button";
+  clearErrors.textContent = "Clear";
+  const closeErrors = document.createElement("button");
+  closeErrors.type = "button";
+  closeErrors.textContent = "Close";
+  for (const button of [clearErrors, closeErrors]) button.style.cssText = "border:1px solid #454b56;border-radius:6px;padding:4px 8px;background:#171a20;color:#e6e8ec;font:600 11px system-ui;cursor:pointer";
+  const errorOutput = document.createElement("pre");
+  errorOutput.style.cssText = "flex:1;overflow:auto;margin:0;padding:10px 12px;white-space:pre-wrap;overflow-wrap:anywhere;color:#ff9da6";
+  const renderErrors = () => {
+    errorOutput.textContent = errorEntries.length ? errorEntries.join("\\n\\n") : "No errors captured yet. JavaScript errors, rejected promises, and failed resources will appear here.";
+    errorOutput.scrollTop = errorOutput.scrollHeight;
+    errorButton.textContent = errorEntries.length ? "Console (" + errorEntries.length + ")" : "Console";
+  };
+  const addError = (detail) => {
+    const message = String(detail || "Unknown error").slice(0, 4000);
+    errorEntries.push(new Date().toLocaleTimeString() + "  " + message);
+    if (errorEntries.length > 100) errorEntries.shift();
+    renderErrors();
+  };
+  errorActions.append(clearErrors, closeErrors);
+  errorHeader.append(errorTitle, errorActions);
+  errorPanel.append(errorHeader, errorOutput);
+  document.documentElement.append(errorPanel, errorButton);
+  errorButton.addEventListener("click", () => { errorPanel.hidden = !errorPanel.hidden; if (!errorPanel.hidden) renderErrors(); });
+  closeErrors.addEventListener("click", () => { errorPanel.hidden = true; });
+  clearErrors.addEventListener("click", () => { errorEntries.length = 0; renderErrors(); });
+  document.addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "j") {
+      event.preventDefault();
+      event.stopPropagation();
+      errorPanel.hidden = !errorPanel.hidden;
+      if (!errorPanel.hidden) renderErrors();
+    } else if (event.key === "Escape" && !errorPanel.hidden) {
+      errorPanel.hidden = true;
+    }
+  }, true);
+  window.addEventListener("error", (event) => {
+    if (event.error?.stack) addError(event.error.stack);
+    else if (event.message) addError(event.message + (event.filename ? "\\n" + event.filename + ":" + event.lineno + ":" + event.colno : ""));
+    else if (event.target && event.target !== window) addError("Resource failed to load: " + (event.target.src || event.target.href || event.target.currentSrc || event.target.tagName || "unknown resource"));
+  }, true);
+  window.addEventListener("unhandledrejection", (event) => {
+    const reason = event.reason;
+    addError(reason?.stack || reason?.message || String(reason));
+  });
+  const originalConsoleError = console.error.bind(console);
+  console.error = (...args) => {
+    addError(args.map((value) => { try { return typeof value === "string" ? value : JSON.stringify(value) ?? String(value); } catch { return String(value); } }).join(" "));
+    originalConsoleError(...args);
+  };
+
   window.__VEILBROWSE_TARGET__ = targetBase.href;
 })();
 </script>`;
