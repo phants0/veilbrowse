@@ -794,6 +794,7 @@ function runtimeBridgeScript(targetUrl) {
   const addError = (detail) => {
     const message = String(detail || "Unknown error").slice(0, 4000);
     errorEntries.push(new Date().toLocaleTimeString() + "  " + message);
+    errorPanel.hidden = false;
     if (errorEntries.length > 100) errorEntries.shift();
     renderErrors();
   };
@@ -805,7 +806,7 @@ function runtimeBridgeScript(targetUrl) {
   closeErrors.addEventListener("click", () => { errorPanel.hidden = true; });
   clearErrors.addEventListener("click", () => { errorEntries.length = 0; renderErrors(); });
   document.addEventListener("keydown", (event) => {
-    if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "j") {
+    if ((event.ctrlKey || event.metaKey) && event.shiftKey && !event.altKey && ((event.key || "").toLowerCase() === "j" || event.code === "KeyJ")) {
       event.preventDefault();
       event.stopPropagation();
       errorPanel.hidden = !errorPanel.hidden;
