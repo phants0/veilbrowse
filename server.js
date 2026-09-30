@@ -804,7 +804,7 @@ function runtimeBridgeScript(targetUrl) {
   errorButton.addEventListener("click", () => { errorPanel.hidden = !errorPanel.hidden; if (!errorPanel.hidden) renderErrors(); });
   closeErrors.addEventListener("click", () => { errorPanel.hidden = true; });
   clearErrors.addEventListener("click", () => { errorEntries.length = 0; renderErrors(); });
-  const handleConsoleShortcut = (event) => {
+  document.addEventListener("keydown", (event) => {
     const key = (event.key || "").toLowerCase();
     if (event.altKey && event.shiftKey && !event.ctrlKey && !event.metaKey && !event.repeat && (key === "c" || event.code === "KeyC")) {
       event.preventDefault();
@@ -813,13 +813,9 @@ function runtimeBridgeScript(targetUrl) {
       if (!errorPanel.hidden) renderErrors();
     } else if (event.key === "Escape" && !errorPanel.hidden) {
       event.preventDefault();
-      event.stopImmediatePropagation();
       errorPanel.hidden = true;
     }
-  };
-  // Capture at window level so page-level document handlers cannot consume
-  // VeilBrowse shortcuts first.
-  window.addEventListener("keydown", handleConsoleShortcut, true);
+  }, true);
   window.addEventListener("error", (event) => {
     if (event.error?.stack) addError(event.error.stack);
     else if (event.message) addError(event.message + (event.filename ? "\\n" + event.filename + ":" + event.lineno + ":" + event.colno : ""));
