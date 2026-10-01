@@ -632,6 +632,26 @@ function runtimeBridgeScript(targetUrl) {
     window.EventSource.CLOSED = OriginalEventSource.CLOSED;
   }
 
+  // Keep upstream scripts from replacing the browser tab's VeilBrowse icon.
+  const enforceVeilBrowseFavicon = () => {
+    const head = document.head;
+    if (!head) return;
+    head.querySelectorAll('link[rel~="icon"], link[rel="shortcut icon"]').forEach((link) => {
+      if (link.id !== "veilbrowse-favicon") link.remove();
+    });
+    let icon = head.querySelector("#veilbrowse-favicon");
+    if (!icon) {
+      icon = document.createElement("link");
+      icon.id = "veilbrowse-favicon";
+      icon.rel = "icon";
+      icon.href = "/favicon.svg?home=1";
+      head.appendChild(icon);
+    }
+  };
+  enforceVeilBrowseFavicon();
+  const faviconObserver = new MutationObserver(enforceVeilBrowseFavicon);
+  if (document.head) faviconObserver.observe(document.head, { childList: true, subtree: true, attributes: true, attributeFilter: ["rel", "href"] });
+
   const searchStyle = document.createElement("style");
   searchStyle.textContent = [
     "#veilbrowse-search-toggle{position:fixed;top:14px;right:14px;z-index:2147483647;height:38px;padding:0 13px;border:1px solid #30343d;border-radius:10px;background:rgba(17,19,24,.94);color:#cbd0d8;font:600 13px/1 system-ui,-apple-system,BlinkMacSystemFont,sans-serif;cursor:pointer;box-shadow:0 8px 28px rgba(0,0,0,.24);backdrop-filter:blur(12px)}",
@@ -729,7 +749,7 @@ function runtimeBridgeScript(targetUrl) {
 
     const handleShortcut = (event) => {
       const key = (event.key || "").toLowerCase();
-      if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && (key === "k" || event.code === "KeyK")) {
+      if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && (key === "k" || event.code === "KeyK" || event.keyCode === 75)) {
         event.preventDefault();
         event.stopImmediatePropagation();
         openSearch();
@@ -806,7 +826,7 @@ function runtimeBridgeScript(targetUrl) {
   clearErrors.addEventListener("click", () => { errorEntries.length = 0; renderErrors(); });
   window.addEventListener("keydown", (event) => {
     const key = (event.key || "").toLowerCase();
-    if (event.altKey && event.shiftKey && !event.ctrlKey && !event.metaKey && !event.repeat && (key === "c" || event.code === "KeyC")) {
+    if (event.altKey && event.shiftKey && !event.ctrlKey && !event.metaKey && !event.repeat && (key === "c" || event.code === "KeyC" || event.keyCode === 67)) {
       event.preventDefault();
       event.stopImmediatePropagation();
       errorPanel.hidden = !errorPanel.hidden;
@@ -996,7 +1016,7 @@ async function rewriteHtml(html, baseUrl) {
   $('link[rel~="icon"], link[rel="shortcut icon"]').remove();
 
   $("head").prepend(
-    '<link rel="icon" href="/favicon.svg">' +
+    '<link id="veilbrowse-favicon" rel="icon" href="/favicon.svg?home=1">' +
     runtimeBridgeScript(baseUrl) +
     '<meta name="referrer" content="strict-origin-when-cross-origin"><meta name="robots" content="noindex,nofollow">'
   );
@@ -1144,27 +1164,6 @@ app.get("/search-debug", async (req, res) => {
   }
 
   const providers = [
-  {
-    name: "DuckDuckGo Web",
-    method: "GET",
-    url: "https://links.duckduckgo.com/d.js?q=" + encodeURIComponent(query) + "&o=json&s=0",
-    headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
-      "Accept": "application/javascript, application/json, text/plain, */*",
-      "Accept-Language": "en-US,en;q=0.9",
-      "Referer": "https://duckduckgo.com/"
-    },
-    format: "json"
-  },
-    {
-      name: "DuckDuckGo HTML",
-      url: "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query) + "&kl=us-en&kp=-2&ia=web",
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml",
-        "Accept-Language": "en-US,en;q=0.9"
-      }
-    },
     {
       name: "Bing RSS",
       url: "https://www.bing.com/search?format=rss&q=" + encodeURIComponent(query),
@@ -1183,7 +1182,6 @@ app.get("/search-debug", async (req, res) => {
       }
     }
   ];
-
   const diagnostics = [];
 
   for (const provider of providers) {
@@ -1261,30 +1259,6 @@ app.get("/search", async (req, res) => {
 
   const providers = [
     {
-      name: "DuckDuckGo HTML",
-      method: "GET",
-      url: "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query) + "&kl=us-en&kp=-2",
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Referer": "https://duckduckgo.com/"
-      },
-      format: "html"
-    },
-    {
-      name: "DuckDuckGo Lite",
-      method: "GET",
-      url: "https://lite.duckduckgo.com/lite/?q=" + encodeURIComponent(query) + "&kp=-2&kl=us-en",
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Referer": "https://duckduckgo.com/"
-      },
-      format: "html"
-    },
-    {
       name: "Bing RSS",
       method: "GET",
       url: "https://www.bing.com/search?format=rss&q=" + encodeURIComponent(query),
@@ -1295,7 +1269,8 @@ app.get("/search", async (req, res) => {
       },
       format: "xml"
     },
-    {      name: "Bing",
+    {
+      name: "Bing",
       method: "GET",
       url: "https://www.bing.com/search?q=" + encodeURIComponent(query) + "&count=20&setlang=en-US",
       headers: {
@@ -1307,7 +1282,6 @@ app.get("/search", async (req, res) => {
       format: "html"
     }
   ];
-
   const escapeHtml = (value) => String(value)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
