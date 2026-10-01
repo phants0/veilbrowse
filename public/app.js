@@ -54,6 +54,19 @@ function normalizeUrl(value) {
 }
 
 
+
+// Restore VeilBrowse's favicon when returning to the homepage, including
+// browser back/forward-cache restores after visiting a proxied website.
+function resetHomeFavicon() {
+  document.querySelectorAll('link[rel~="icon"], link[rel="shortcut icon"]').forEach((link) => link.remove());
+  const icon = document.createElement("link");
+  icon.rel = "icon";
+  icon.href = "/favicon.svg?home=1";
+  document.head.appendChild(icon);
+}
+window.addEventListener("pageshow", resetHomeFavicon);
+resetHomeFavicon();
+
 // Use Alt-based shortcuts because browsers reserve Ctrl+K and Ctrl+Shift+J.
 window.addEventListener("keydown", (event) => {
   const key = (event.key || "").toLowerCase();
