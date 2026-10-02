@@ -461,6 +461,216 @@ function runtimeBridgeScript(targetUrl) {
     }
   };
 
+
+  // Initialize VeilBrowse's own controls before touching upstream page APIs.
+  // A failure in URL-rewriting setup must not prevent the controls from appearing.
+  window.__VEILBROWSE_TARGET__ = targetBase.href;
+  try {
+    const searchStyle = document.createElement("style");
+    searchStyle.textContent = [
+      "#veilbrowse-search-toggle{position:fixed;top:14px;right:14px;z-index:2147483647;height:38px;padding:0 13px;border:1px solid #30343d;border-radius:10px;background:rgba(17,19,24,.94);color:#cbd0d8;font:600 13px/1 system-ui,-apple-system,BlinkMacSystemFont,sans-serif;cursor:pointer;box-shadow:0 8px 28px rgba(0,0,0,.24);backdrop-filter:blur(12px)}",
+      "#veilbrowse-search-toggle:hover{background:#1a1d23;color:#fff}",
+      "#veilbrowse-search-toggle:focus-visible{outline:2px solid #8ab4ff;outline-offset:2px}",
+      "#veilbrowse-search-overlay{position:fixed;inset:0;z-index:2147483646;display:flex;align-items:flex-start;justify-content:center;padding:12vh 20px 20px;background:rgba(0,0,0,.42);backdrop-filter:blur(3px)}",
+      "#veilbrowse-search-overlay[hidden]{display:none}",
+      "#veilbrowse-search-box{display:flex;gap:8px;width:min(760px,100%);padding:8px;border:1px solid #30343d;border-radius:16px;background:#0f1116;box-shadow:0 24px 80px rgba(0,0,0,.5)}",
+      "#veilbrowse-search-input{flex:1;min-width:0;height:44px;border:0;outline:0;border-radius:10px;background:#171a20;color:#fff;padding:0 14px;font:16px system-ui,-apple-system,BlinkMacSystemFont,sans-serif}",
+      "#veilbrowse-search-input::placeholder{color:#737986}",
+      "#veilbrowse-search-go{height:44px;border:0;border-radius:10px;padding:0 18px;background:#f4f4f5;color:#090a0d;font:700 14px system-ui,-apple-system,BlinkMacSystemFont,sans-serif;cursor:pointer}",
+      "#veilbrowse-search-go:hover{background:#fff}"
+    ].join("");
+  
+    const createSearchUi = () => {
+      if (document.getElementById("veilbrowse-search-overlay")) return;
+  
+      document.head.appendChild(searchStyle);
+  
+      const toggle = document.createElement("button");
+      toggle.id = "veilbrowse-search-toggle";
+      toggle.type = "button";
+      toggle.textContent = "Search";
+      toggle.title = "Open VeilBrowse search (Alt+K)";
+      toggle.setAttribute("aria-label", "Open VeilBrowse search");
+  
+      const overlay = document.createElement("div");
+      overlay.id = "veilbrowse-search-overlay";
+      overlay.hidden = true;
+      overlay.setAttribute("role", "dialog");
+      overlay.setAttribute("aria-label", "VeilBrowse search");
+  
+      const box = document.createElement("form");
+      box.id = "veilbrowse-search-box";
+  
+      const searchInput = document.createElement("input");
+      searchInput.id = "veilbrowse-search-input";
+      searchInput.type = "text";
+      searchInput.placeholder = "Search or enter a website URL";
+      searchInput.autocomplete = "off";
+      searchInput.spellcheck = false;
+      searchInput.setAttribute("aria-label", "Search or enter a website URL");
+  
+      const go = document.createElement("button");
+      go.id = "veilbrowse-search-go";
+      go.type = "submit";
+      go.textContent = "Go";
+  
+      box.append(searchInput, go);
+      overlay.appendChild(box);
+      document.body.append(toggle, overlay);
+  
+      const closeSearch = () => {
+        overlay.hidden = true;
+        toggle.focus();
+      };
+  
+      const openSearch = () => {
+        overlay.hidden = false;
+        searchInput.value = "";
+        searchInput.focus();
+      };
+  
+      const submitSearch = (event) => {
+        event.preventDefault();
+        const value = searchInput.value.trim();
+        if (!value) return;
+  
+        if (/^[a-z][a-z0-9+.-]*:/i.test(value) && !/^https?:\/\//i.test(value)) return;
+  
+        let destination;
+        try {
+          const candidate = /^(?:https?:\/\/|\/\/)/i.test(value)
+            ? (value.startsWith("//") ? "https:" + value : value)
+            : "https://" + value;
+          const url = new URL(candidate);
+          const looksLikeUrl = /^(?:https?:\/\/|\/\/)/i.test(value) ||
+            /^localhost(?::\d+)?(?:[/?#]|$)/i.test(value) ||
+            /^\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?(?:[/?#]|$)/.test(value) ||
+            (url.hostname.includes(".") && !url.hostname.endsWith("."));
+          destination = looksLikeUrl
+            ? "/proxy?url=" + encodeURIComponent(url.href)
+            : "/search?q=" + encodeURIComponent(value);
+        } catch {
+          destination = "/search?q=" + encodeURIComponent(value);
+        }
+  
+        window.location.href = destination;
+      };
+  
+      toggle.addEventListener("click", openSearch);
+      overlay.addEventListener("click", (event) => {
+        if (event.target === overlay) closeSearch();    });
+      box.addEventListener("submit", submitSearch);
+  
+      const handleShortcut = (event) => {
+        const key = (event.key || "").toLowerCase();
+        if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && (key === "k" || event.code === "KeyK" || event.keyCode === 75)) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          openSearch();
+          return;
+        }
+  
+        if (event.key === "Escape" && !overlay.hidden) {
+          event.preventDefault();
+          closeSearch();
+        }
+      };
+      window.addEventListener("keydown", handleShortcut, true);
+      document.addEventListener("keydown", handleShortcut, true);
+    };
+  
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", createSearchUi, { once: true });
+    } else {
+      createSearchUi();
+    }
+  } catch (error) {
+    console.error("VeilBrowse search UI initialization failed:", error?.message || error);
+  }
+
+  try {
+    // Lightweight, page-local error console. Entries stay in this document and
+    // are never sent to the VeilBrowse server or persisted.
+    const errorEntries = [];
+    const errorButton = document.createElement("button");
+    errorButton.type = "button";
+    errorButton.textContent = "Console";
+    errorButton.title = "Open error console (Alt+Shift+C)";
+    errorButton.setAttribute("aria-label", "Open error console");
+    errorButton.style.cssText = "position:fixed;right:14px;bottom:14px;z-index:2147483647;border:1px solid #454b56;border-radius:9px;padding:8px 12px;background:#111318;color:#e6e8ec;font:600 12px system-ui;cursor:pointer;box-shadow:0 6px 24px #0005";
+    const errorPanel = document.createElement("section");
+    errorPanel.id = "veilbrowse-error-console";
+    const errorStyle = document.createElement("style");
+    errorStyle.textContent = "#veilbrowse-error-console[hidden]{display:none!important}";
+    document.head.appendChild(errorStyle);
+    errorPanel.hidden = true;
+    errorPanel.setAttribute("role", "dialog");
+    errorPanel.setAttribute("aria-label", "VeilBrowse error console");
+    errorPanel.style.cssText = "position:fixed;right:14px;bottom:58px;z-index:2147483647;width:min(680px,calc(100vw - 28px));height:min(360px,55vh);display:flex;flex-direction:column;border:1px solid #454b56;border-radius:12px;background:#0b0d11;color:#e6e8ec;box-shadow:0 18px 60px #0009;font:12px/1.5 ui-monospace,monospace";
+    const errorHeader = document.createElement("div");
+    errorHeader.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-bottom:1px solid #30343d;font:600 12px system-ui";
+    const errorTitle = document.createElement("span");
+    errorTitle.textContent = "VeilBrowse Console";
+    const errorActions = document.createElement("div");
+    errorActions.style.cssText = "display:flex;gap:8px";
+    const clearErrors = document.createElement("button");
+    clearErrors.type = "button";
+    clearErrors.textContent = "Clear";
+    const closeErrors = document.createElement("button");
+    closeErrors.type = "button";
+    closeErrors.textContent = "Close";
+    for (const button of [clearErrors, closeErrors]) button.style.cssText = "border:1px solid #454b56;border-radius:6px;padding:4px 8px;background:#171a20;color:#e6e8ec;font:600 11px system-ui;cursor:pointer";
+    const errorOutput = document.createElement("pre");
+    errorOutput.style.cssText = "flex:1;overflow:auto;margin:0;padding:10px 12px;white-space:pre-wrap;overflow-wrap:anywhere;color:#ff9da6";
+    const renderErrors = () => {
+      errorOutput.textContent = errorEntries.length ? errorEntries.join("\\n\\n") : "No errors captured yet. JavaScript errors, rejected promises, and failed resources will appear here.";
+      errorOutput.scrollTop = errorOutput.scrollHeight;
+      errorButton.textContent = errorEntries.length ? "Console (" + errorEntries.length + ")" : "Console";
+    };
+    const addError = (detail) => {
+      const message = String(detail || "Unknown error").slice(0, 4000);
+      errorEntries.push(new Date().toLocaleTimeString() + "  " + message);
+      errorPanel.hidden = false;
+      if (errorEntries.length > 100) errorEntries.shift();
+      renderErrors();
+    };
+    errorActions.append(clearErrors, closeErrors);
+    errorHeader.append(errorTitle, errorActions);
+    errorPanel.append(errorHeader, errorOutput);
+    document.documentElement.append(errorPanel, errorButton);
+    errorButton.addEventListener("click", () => { errorPanel.hidden = !errorPanel.hidden; if (!errorPanel.hidden) renderErrors(); });
+    closeErrors.addEventListener("click", () => { errorPanel.hidden = true; });
+    clearErrors.addEventListener("click", () => { errorEntries.length = 0; renderErrors(); });
+    window.addEventListener("keydown", (event) => {
+      const key = (event.key || "").toLowerCase();
+      if (event.altKey && event.shiftKey && !event.ctrlKey && !event.metaKey && !event.repeat && (key === "c" || event.code === "KeyC" || event.keyCode === 67)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        errorPanel.hidden = !errorPanel.hidden;
+        if (!errorPanel.hidden) renderErrors();
+      } else if (event.key === "Escape" && !errorPanel.hidden) {
+        event.preventDefault();
+        errorPanel.hidden = true;
+      }
+    }, true);
+    window.addEventListener("error", (event) => {
+      if (event.error?.stack) addError(event.error.stack);
+      else if (event.message) addError(event.message + (event.filename ? "\\n" + event.filename + ":" + event.lineno + ":" + event.colno : ""));
+      else if (event.target && event.target !== window) addError("Resource failed to load: " + (event.target.src || event.target.href || event.target.currentSrc || event.target.tagName || "unknown resource"));
+    }, true);
+    window.addEventListener("unhandledrejection", (event) => {
+      const reason = event.reason;
+      addError(reason?.stack || reason?.message || String(reason));
+    });
+    const originalConsoleError = console.error.bind(console);
+    console.error = (...args) => {
+      addError(args.map((value) => { try { return typeof value === "string" ? value : JSON.stringify(value) ?? String(value); } catch { return String(value); } }).join(" "));
+      originalConsoleError(...args);
+    };
+  } catch (error) {
+    // Keep a search interface available even if the optional console fails.
+  }
+
   const originalFetch = window.fetch.bind(window);
   window.fetch = (input, init) => {
     const rewritten = proxy(input);
@@ -652,206 +862,7 @@ function runtimeBridgeScript(targetUrl) {
   const faviconObserver = new MutationObserver(enforceVeilBrowseFavicon);
   if (document.head) faviconObserver.observe(document.head, { childList: true, subtree: true, attributes: true, attributeFilter: ["rel", "href"] });
 
-  const searchStyle = document.createElement("style");
-  searchStyle.textContent = [
-    "#veilbrowse-search-toggle{position:fixed;top:14px;right:14px;z-index:2147483647;height:38px;padding:0 13px;border:1px solid #30343d;border-radius:10px;background:rgba(17,19,24,.94);color:#cbd0d8;font:600 13px/1 system-ui,-apple-system,BlinkMacSystemFont,sans-serif;cursor:pointer;box-shadow:0 8px 28px rgba(0,0,0,.24);backdrop-filter:blur(12px)}",
-    "#veilbrowse-search-toggle:hover{background:#1a1d23;color:#fff}",
-    "#veilbrowse-search-toggle:focus-visible{outline:2px solid #8ab4ff;outline-offset:2px}",
-    "#veilbrowse-search-overlay{position:fixed;inset:0;z-index:2147483646;display:flex;align-items:flex-start;justify-content:center;padding:12vh 20px 20px;background:rgba(0,0,0,.42);backdrop-filter:blur(3px)}",
-    "#veilbrowse-search-overlay[hidden]{display:none}",
-    "#veilbrowse-search-box{display:flex;gap:8px;width:min(760px,100%);padding:8px;border:1px solid #30343d;border-radius:16px;background:#0f1116;box-shadow:0 24px 80px rgba(0,0,0,.5)}",
-    "#veilbrowse-search-input{flex:1;min-width:0;height:44px;border:0;outline:0;border-radius:10px;background:#171a20;color:#fff;padding:0 14px;font:16px system-ui,-apple-system,BlinkMacSystemFont,sans-serif}",
-    "#veilbrowse-search-input::placeholder{color:#737986}",
-    "#veilbrowse-search-go{height:44px;border:0;border-radius:10px;padding:0 18px;background:#f4f4f5;color:#090a0d;font:700 14px system-ui,-apple-system,BlinkMacSystemFont,sans-serif;cursor:pointer}",
-    "#veilbrowse-search-go:hover{background:#fff}"
-  ].join("");
 
-  const createSearchUi = () => {
-    if (document.getElementById("veilbrowse-search-overlay")) return;
-
-    document.head.appendChild(searchStyle);
-
-    const toggle = document.createElement("button");
-    toggle.id = "veilbrowse-search-toggle";
-    toggle.type = "button";
-    toggle.textContent = "Search";
-    toggle.title = "Open VeilBrowse search (Alt+K)";
-    toggle.setAttribute("aria-label", "Open VeilBrowse search");
-
-    const overlay = document.createElement("div");
-    overlay.id = "veilbrowse-search-overlay";
-    overlay.hidden = true;
-    overlay.setAttribute("role", "dialog");
-    overlay.setAttribute("aria-label", "VeilBrowse search");
-
-    const box = document.createElement("form");
-    box.id = "veilbrowse-search-box";
-
-    const searchInput = document.createElement("input");
-    searchInput.id = "veilbrowse-search-input";
-    searchInput.type = "text";
-    searchInput.placeholder = "Search or enter a website URL";
-    searchInput.autocomplete = "off";
-    searchInput.spellcheck = false;
-    searchInput.setAttribute("aria-label", "Search or enter a website URL");
-
-    const go = document.createElement("button");
-    go.id = "veilbrowse-search-go";
-    go.type = "submit";
-    go.textContent = "Go";
-
-    box.append(searchInput, go);
-    overlay.appendChild(box);
-    document.body.append(toggle, overlay);
-
-    const closeSearch = () => {
-      overlay.hidden = true;
-      toggle.focus();
-    };
-
-    const openSearch = () => {
-      overlay.hidden = false;
-      searchInput.value = "";
-      searchInput.focus();
-    };
-
-    const submitSearch = (event) => {
-      event.preventDefault();
-      const value = searchInput.value.trim();
-      if (!value) return;
-
-      if (/^[a-z][a-z0-9+.-]*:/i.test(value) && !/^https?:\/\//i.test(value)) return;
-
-      let destination;
-      try {
-        const candidate = /^(?:https?:\/\/|\/\/)/i.test(value)
-          ? (value.startsWith("//") ? "https:" + value : value)
-          : "https://" + value;
-        const url = new URL(candidate);
-        const looksLikeUrl = /^(?:https?:\/\/|\/\/)/i.test(value) ||
-          /^localhost(?::\d+)?(?:[/?#]|$)/i.test(value) ||
-          /^\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?(?:[/?#]|$)/.test(value) ||
-          (url.hostname.includes(".") && !url.hostname.endsWith("."));
-        destination = looksLikeUrl
-          ? "/proxy?url=" + encodeURIComponent(url.href)
-          : "/search?q=" + encodeURIComponent(value);
-      } catch {
-        destination = "/search?q=" + encodeURIComponent(value);
-      }
-
-      window.location.href = destination;
-    };
-
-    toggle.addEventListener("click", openSearch);
-    overlay.addEventListener("click", (event) => {
-      if (event.target === overlay) closeSearch();    });
-    box.addEventListener("submit", submitSearch);
-
-    const handleShortcut = (event) => {
-      const key = (event.key || "").toLowerCase();
-      if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && (key === "k" || event.code === "KeyK" || event.keyCode === 75)) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        openSearch();
-        return;
-      }
-
-      if (event.key === "Escape" && !overlay.hidden) {
-        event.preventDefault();
-        closeSearch();
-      }
-    };
-    window.addEventListener("keydown", handleShortcut, true);
-    document.addEventListener("keydown", handleShortcut, true);
-  };
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", createSearchUi, { once: true });
-  } else {
-    createSearchUi();
-  }
-
-
-  // Lightweight, page-local error console. Entries stay in this document and
-  // are never sent to the VeilBrowse server or persisted.
-  const errorEntries = [];
-  const errorButton = document.createElement("button");
-  errorButton.type = "button";
-  errorButton.textContent = "Console";
-  errorButton.title = "Open error console (Alt+Shift+C)";
-  errorButton.setAttribute("aria-label", "Open error console");
-  errorButton.style.cssText = "position:fixed;right:14px;bottom:14px;z-index:2147483647;border:1px solid #454b56;border-radius:9px;padding:8px 12px;background:#111318;color:#e6e8ec;font:600 12px system-ui;cursor:pointer;box-shadow:0 6px 24px #0005";
-  const errorPanel = document.createElement("section");
-  errorPanel.id = "veilbrowse-error-console";
-  const errorStyle = document.createElement("style");
-  errorStyle.textContent = "#veilbrowse-error-console[hidden]{display:none!important}";
-  document.head.appendChild(errorStyle);
-  errorPanel.hidden = true;
-  errorPanel.setAttribute("role", "dialog");
-  errorPanel.setAttribute("aria-label", "VeilBrowse error console");
-  errorPanel.style.cssText = "position:fixed;right:14px;bottom:58px;z-index:2147483647;width:min(680px,calc(100vw - 28px));height:min(360px,55vh);display:flex;flex-direction:column;border:1px solid #454b56;border-radius:12px;background:#0b0d11;color:#e6e8ec;box-shadow:0 18px 60px #0009;font:12px/1.5 ui-monospace,monospace";
-  const errorHeader = document.createElement("div");
-  errorHeader.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-bottom:1px solid #30343d;font:600 12px system-ui";
-  const errorTitle = document.createElement("span");
-  errorTitle.textContent = "VeilBrowse Console";
-  const errorActions = document.createElement("div");
-  errorActions.style.cssText = "display:flex;gap:8px";
-  const clearErrors = document.createElement("button");
-  clearErrors.type = "button";
-  clearErrors.textContent = "Clear";
-  const closeErrors = document.createElement("button");
-  closeErrors.type = "button";
-  closeErrors.textContent = "Close";
-  for (const button of [clearErrors, closeErrors]) button.style.cssText = "border:1px solid #454b56;border-radius:6px;padding:4px 8px;background:#171a20;color:#e6e8ec;font:600 11px system-ui;cursor:pointer";
-  const errorOutput = document.createElement("pre");
-  errorOutput.style.cssText = "flex:1;overflow:auto;margin:0;padding:10px 12px;white-space:pre-wrap;overflow-wrap:anywhere;color:#ff9da6";
-  const renderErrors = () => {
-    errorOutput.textContent = errorEntries.length ? errorEntries.join("\\n\\n") : "No errors captured yet. JavaScript errors, rejected promises, and failed resources will appear here.";
-    errorOutput.scrollTop = errorOutput.scrollHeight;
-    errorButton.textContent = errorEntries.length ? "Console (" + errorEntries.length + ")" : "Console";
-  };
-  const addError = (detail) => {
-    const message = String(detail || "Unknown error").slice(0, 4000);
-    errorEntries.push(new Date().toLocaleTimeString() + "  " + message);
-    errorPanel.hidden = false;
-    if (errorEntries.length > 100) errorEntries.shift();
-    renderErrors();
-  };
-  errorActions.append(clearErrors, closeErrors);
-  errorHeader.append(errorTitle, errorActions);
-  errorPanel.append(errorHeader, errorOutput);
-  document.documentElement.append(errorPanel, errorButton);
-  errorButton.addEventListener("click", () => { errorPanel.hidden = !errorPanel.hidden; if (!errorPanel.hidden) renderErrors(); });
-  closeErrors.addEventListener("click", () => { errorPanel.hidden = true; });
-  clearErrors.addEventListener("click", () => { errorEntries.length = 0; renderErrors(); });
-  window.addEventListener("keydown", (event) => {
-    const key = (event.key || "").toLowerCase();
-    if (event.altKey && event.shiftKey && !event.ctrlKey && !event.metaKey && !event.repeat && (key === "c" || event.code === "KeyC" || event.keyCode === 67)) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      errorPanel.hidden = !errorPanel.hidden;
-      if (!errorPanel.hidden) renderErrors();
-    } else if (event.key === "Escape" && !errorPanel.hidden) {
-      event.preventDefault();
-      errorPanel.hidden = true;
-    }
-  }, true);
-  window.addEventListener("error", (event) => {
-    if (event.error?.stack) addError(event.error.stack);
-    else if (event.message) addError(event.message + (event.filename ? "\\n" + event.filename + ":" + event.lineno + ":" + event.colno : ""));
-    else if (event.target && event.target !== window) addError("Resource failed to load: " + (event.target.src || event.target.href || event.target.currentSrc || event.target.tagName || "unknown resource"));
-  }, true);
-  window.addEventListener("unhandledrejection", (event) => {
-    const reason = event.reason;
-    addError(reason?.stack || reason?.message || String(reason));
-  });
-  const originalConsoleError = console.error.bind(console);
-  console.error = (...args) => {
-    addError(args.map((value) => { try { return typeof value === "string" ? value : JSON.stringify(value) ?? String(value); } catch { return String(value); } }).join(" "));
-    originalConsoleError(...args);
-  };
-
-  window.__VEILBROWSE_TARGET__ = targetBase.href;
 })();
 </script>`;
 }
