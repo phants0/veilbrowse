@@ -644,7 +644,7 @@ function runtimeBridgeScript(targetUrl) {
     errorButton.addEventListener("click", () => { errorPanel.hidden = !errorPanel.hidden; if (!errorPanel.hidden) renderErrors(); });
     closeErrors.addEventListener("click", () => { errorPanel.hidden = true; });
     clearErrors.addEventListener("click", () => { errorEntries.length = 0; renderErrors(); });
-    window.addEventListener("keydown", (event) => {
+    const handleConsoleShortcut = (event) => {
       const key = (event.key || "").toLowerCase();
       if (event.altKey && event.shiftKey && !event.ctrlKey && !event.metaKey && !event.repeat && (key === "c" || event.code === "KeyC" || event.keyCode === 67)) {
         event.preventDefault();
@@ -655,7 +655,9 @@ function runtimeBridgeScript(targetUrl) {
         event.preventDefault();
         errorPanel.hidden = true;
       }
-    }, true);
+    };
+    window.addEventListener("keydown", handleConsoleShortcut, true);
+    document.addEventListener("keydown", handleConsoleShortcut, true);
     window.addEventListener("error", (event) => {
       if (event.error?.stack) addError(event.error.stack);
       else if (event.message) addError(event.message + (event.filename ? "\\n" + event.filename + ":" + event.lineno + ":" + event.colno : ""));
