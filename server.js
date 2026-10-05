@@ -483,7 +483,7 @@ function runtimeBridgeScript(targetUrl) {
     const createSearchUi = () => {
       if (document.getElementById("veilbrowse-search-overlay")) return;
   
-      document.head.appendChild(searchStyle);
+      (document.head || document.documentElement).appendChild(searchStyle);
   
       const toggle = document.createElement("button");
       toggle.id = "veilbrowse-search-toggle";
@@ -516,7 +516,7 @@ function runtimeBridgeScript(targetUrl) {
   
       box.append(searchInput, go);
       overlay.appendChild(box);
-      document.body.append(toggle, overlay);
+      document.documentElement.append(toggle, overlay);
   
       const closeSearch = () => {
         overlay.hidden = true;
@@ -566,7 +566,11 @@ function runtimeBridgeScript(targetUrl) {
         if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && (key === "k" || event.code === "KeyK" || event.keyCode === 75)) {
           event.preventDefault();
           event.stopImmediatePropagation();
-          openSearch();
+          if (overlay.hidden) {
+            openSearch();
+          } else {
+            closeSearch();
+          }
           return;
         }
   
