@@ -583,11 +583,10 @@ function runtimeBridgeScript(targetUrl) {
       document.addEventListener("keydown", handleShortcut, true);
     };
   
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", createSearchUi, { once: true });
-    } else {
-      createSearchUi();
-    }
+    // The runtime is injected into <head>, so initialize immediately.
+    // Waiting for DOMContentLoaded lets upstream pages interfere with or
+    // replace the document lifecycle before VeilBrowse's controls exist.
+    createSearchUi();
   } catch (error) {
     console.error("VeilBrowse search UI initialization failed:", error?.message || error);
   }
