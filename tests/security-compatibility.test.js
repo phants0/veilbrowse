@@ -40,14 +40,29 @@ test("redirect destinations are revalidated before being fetched", () => {
   assert.match(source, /status\(508\)\.send\("Too many redirects\."/);
 });
 
-test("HTML rewriting covers navigation and common resource URLs", () => {
+test("HTML rewriting covers navigation, new tabs, and common resource URLs", () => {
   for (const entry of [
     '["a", "href"]', '["area", "href"]', '["link", "href"]',
     '["script", "src"]', '["img", "src"]', '["iframe", "src"]',
     '["form", "action"]'
   ]) assert.ok(source.includes(entry), `Missing HTML rewrite target: ${entry}`);
-  assert.match(source, /removeAttr\("target"\)/);
+  assert.match(source, /target && !\["_self", "_top", "_parent"\]\.includes\(target\)/);
+  assert.match(source, /\$\(element\)\.attr\("target", "_blank"\)/);
   assert.match(source, /runtimeBridgeScript\(currentTarget\.href\)/);
+});
+
+test("VeilBrowse shortcuts are installed independently of upstream page handlers", () => {
+  assert.match(source, /__VEILBROWSE_OPEN_SEARCH__/);
+  assert.match(source, /__VEILBROWSE_TOGGLE_CONSOLE__/);
+  assert.match(source, /handleVeilShortcut/);
+  assert.match(source, /window\.addEventListener\("keyup", handleVeilShortcutKeyup/);
+  assert.match(source, /document\.addEventListener\("keyup", handleVeilShortcutKeyup/);
+});
+
+test("Search page exposes both VeilBrowse shortcuts", () => {
+  assert.match(source, /veilbrowse-search-console-button/);
+  assert.match(source, /consoleKey=event\.altKey&&event\.shiftKey/);
+  assert.match(source, /key==="k"/);
 });
 
 test("rewriting preserves non-network URL schemes instead of proxying them", () => {
