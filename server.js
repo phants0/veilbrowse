@@ -732,9 +732,11 @@ function runtimeBridgeScript(targetUrl) {
     event.preventDefault();
     event.stopImmediatePropagation();
 
-    const target = link.getAttribute("target");
-    if (target === "_blank") {
-      originalWindowOpen(rewritten, "_blank", "noopener");
+    const target = (link.getAttribute("target") || "").trim();
+    if (target && !["_self", "_top", "_parent"].includes(target.toLowerCase())) {
+      // Preserve links intended for another browsing context, but only after
+      // converting their destination to a VeilBrowse URL.
+      originalWindowOpen(rewritten, target === "_blank" ? "_blank" : target, "noopener");
       return;
     }
 
@@ -743,6 +745,33 @@ function runtimeBridgeScript(targetUrl) {
     // Navigation API, whose async navigation promise can fail without
     // reaching the old fallback.
     window.location.assign(rewritten);
+  }, true);
+
+  // Also handle auxiliary activations such as middle-clicks. This keeps
+  // target-based new-tab navigation inside VeilBrowse as well.
+  window.addEventListener("auxclick", (event) => {
+    if (event.button !== 1) return;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+    const link = findNavigationLink(event);
+    if (!link) return;
+
+    const href = link.getAttribute("href");
+    if (!href || href.startsWith("#") || href.startsWith("javascript:")) return;
+
+    const rewritten = proxy(href);
+    if (!rewritten) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    const target = (link.getAttribute("target") || "").trim();
+    if (target && !["_self", "_top", "_parent"].includes(target.toLowerCase())) {
+      originalWindowOpen(rewritten, target === "_blank" ? "_blank" : target, "noopener");
+      return;
+    }
+
+    originalWindowOpen(rewritten, "_blank", "noopener");
   }, true);
 
   // Do not try to rewrite cross-origin Navigation API events. VeilBrowse
@@ -912,10 +941,8 @@ async function rewriteHtml(html, baseUrl) {
 
       $(element).attr(attribute, proxyUrl(value, baseUrl));
 
-      // Navigation must remain in the current VeilBrowse browsing context.
-      if (selector === "a" || selector === "area") {
-        $(element).removeAttr("target");
-      }
+      // Preserve the upstream link target. The runtime intercepts new-window
+      // targets and opens the already-proxied destination.
     });
   }
 
@@ -925,7 +952,6 @@ async function rewriteHtml(html, baseUrl) {
     const href = $(element).attr("href");
     if (!href || href.startsWith("#") || href.startsWith("javascript:")) return;
     $(element).attr("href", proxyUrl(href, baseUrl));
-    $(element).removeAttr("target");
   });
 
   $("[srcset]").each((_, element) => {
