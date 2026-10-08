@@ -561,26 +561,18 @@ function runtimeBridgeScript(targetUrl) {
         if (event.target === overlay) closeSearch();    });
       box.addEventListener("submit", submitSearch);
   
-      const handleShortcut = (event) => {
-        const key = (event.key || "").toLowerCase();
-        if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && (key === "k" || event.code === "KeyK" || event.keyCode === 75)) {
-          event.preventDefault();
-          event.stopImmediatePropagation();
-          if (overlay.hidden) {
-            openSearch();
-          } else {
-            closeSearch();
-          }
-          return;
-        }
-  
+      window.__VEILBROWSE_OPEN_SEARCH__ = () => {
+        if (overlay.hidden) openSearch();
+        else closeSearch();
+      };
+      window.__VEILBROWSE_CLOSE_SEARCH__ = () => closeSearch();
+      window.addEventListener("keydown", (event) => {
         if (event.key === "Escape" && !overlay.hidden) {
           event.preventDefault();
+          event.stopImmediatePropagation();
           closeSearch();
         }
-      };
-      window.addEventListener("keydown", handleShortcut, true);
-      document.addEventListener("keydown", handleShortcut, true);
+      }, true);
     };
   
     // The runtime is injected into <head>, so initialize immediately.
@@ -644,20 +636,20 @@ function runtimeBridgeScript(targetUrl) {
     errorButton.addEventListener("click", () => { errorPanel.hidden = !errorPanel.hidden; if (!errorPanel.hidden) renderErrors(); });
     closeErrors.addEventListener("click", () => { errorPanel.hidden = true; });
     clearErrors.addEventListener("click", () => { errorEntries.length = 0; renderErrors(); });
-    const handleConsoleShortcut = (event) => {
-      const key = (event.key || "").toLowerCase();
-      if (event.altKey && event.shiftKey && !event.ctrlKey && !event.metaKey && !event.repeat && (key === "c" || event.code === "KeyC" || event.keyCode === 67)) {
+    window.__VEILBROWSE_TOGGLE_CONSOLE__ = () => {
+      errorPanel.hidden = !errorPanel.hidden;
+      if (!errorPanel.hidden) renderErrors();
+    };
+    window.__VEILBROWSE_CLOSE_CONSOLE__ = () => {
+      errorPanel.hidden = true;
+    };
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !errorPanel.hidden) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        errorPanel.hidden = !errorPanel.hidden;
-        if (!errorPanel.hidden) renderErrors();
-      } else if (event.key === "Escape" && !errorPanel.hidden) {
-        event.preventDefault();
         errorPanel.hidden = true;
       }
-    };
-    window.addEventListener("keydown", handleConsoleShortcut, true);
-    document.addEventListener("keydown", handleConsoleShortcut, true);
+    }, true);
     window.addEventListener("error", (event) => {
       if (event.error?.stack) addError(event.error.stack);
       else if (event.message) addError(event.message + (event.filename ? "\\n" + event.filename + ":" + event.lineno + ":" + event.colno : ""));
@@ -675,6 +667,54 @@ function runtimeBridgeScript(targetUrl) {
   } catch (error) {
     // Keep a search interface available even if the optional console fails.
   }
+
+  // VeilBrowse-owned shortcuts must be independent of upstream page handlers.
+  // Capture at both window and document, and keep a keyup fallback for pages
+  // that aggressively consume keydown events.
+  let veilShortcutDown = false;
+  const handleVeilShortcut = (event) => {
+    const key = (event.key || "").toLowerCase();
+    const isSearch = event.altKey && !event.ctrlKey && !event.metaKey &&
+      !event.shiftKey && !event.repeat && (key === "k" || event.code === "KeyK" || event.keyCode === 75);
+    const isConsole = event.altKey && event.shiftKey && !event.ctrlKey &&
+      !event.metaKey && !event.repeat && (key === "c" || event.code === "KeyC" || event.keyCode === 67);
+
+    if (!isSearch && !isConsole) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    veilShortcutDown = true;
+
+    if (isSearch) window.__VEILBROWSE_OPEN_SEARCH__?.();
+    else window.__VEILBROWSE_TOGGLE_CONSOLE__?.();
+  };
+
+  const handleVeilShortcutKeyup = (event) => {
+    const key = (event.key || "").toLowerCase();
+    const isSearch = event.altKey && !event.ctrlKey && !event.metaKey &&
+      !event.shiftKey && (key === "k" || event.code === "KeyK" || event.keyCode === 75);
+    const isConsole = event.altKey && event.shiftKey && !event.ctrlKey &&
+      !event.metaKey && (key === "c" || event.code === "KeyC" || event.keyCode === 67);
+
+    if (!isSearch && !isConsole) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    // Only use keyup if keydown was never delivered to the bridge.
+    if (veilShortcutDown) {
+      veilShortcutDown = false;
+      return;
+    }
+
+    if (isSearch) window.__VEILBROWSE_OPEN_SEARCH__?.();
+    else window.__VEILBROWSE_TOGGLE_CONSOLE__?.();
+  };
+
+  window.addEventListener("keydown", handleVeilShortcut, { capture: true, passive: false });
+  document.addEventListener("keydown", handleVeilShortcut, { capture: true, passive: false });
+  window.addEventListener("keyup", handleVeilShortcutKeyup, { capture: true, passive: false });
+  document.addEventListener("keyup", handleVeilShortcutKeyup, { capture: true, passive: false });
 
   const originalFetch = window.fetch.bind(window);
   window.fetch = (input, init) => {
@@ -952,6 +992,17 @@ async function rewriteHtml(html, baseUrl) {
     const href = $(element).attr("href");
     if (!href || href.startsWith("#") || href.startsWith("javascript:")) return;
     $(element).attr("href", proxyUrl(href, baseUrl));
+
+    // Keep links that request another browsing context inside VeilBrowse.
+    // Normalizing to _blank avoids named targets navigating the current
+    // upstream context and gives the browser a native new-tab fallback.
+    const target = ($(element).attr("target") || "").trim().toLowerCase();
+    if (target && !["_self", "_top", "_parent"].includes(target)) {
+      $(element).attr("target", "_blank");
+      const rel = new Set((($(element).attr("rel") || "").split(/\s+/)).filter(Boolean));
+      rel.add("noopener");
+      $(element).attr("rel", [...rel].join(" "));
+    }
   });
 
   $("[srcset]").each((_, element) => {
